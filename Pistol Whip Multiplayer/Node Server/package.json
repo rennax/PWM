@@ -1,0 +1,17 @@
+{
+  "name": "node-server",
+  "version": "1.0.0",
+  "description": "server for PW multiplayer mod",
+  "main": "main.js",
+  "scripts": {
+    "test": "test",
+    "start": "node main.js" 
+  },
+  "author": "renaxi",
+  "license": "MIT",
+  "dependencies": {
+    "socket.io": "^3.1.2",
+    "uuid": "^8.3.2"
+  }
+}
+
