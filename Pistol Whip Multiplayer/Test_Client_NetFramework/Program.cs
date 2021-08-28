@@ -62,12 +62,14 @@ namespace Test_client
             });
 
             client.On("CreatedLobby", data => {
+                lobby = data.GetValue<Lobby>(0);
                 Console.WriteLine("Created Lobby");
             });
 
             client.On("LobbyClosed", data => {
                 Lobby lobby = data.GetValue<Lobby>();
                 Console.WriteLine($"lobby {lobby.Id} closed");
+                LeaveLobby();
             });
 
             client.On("PlayerLeftLobby", data => {
@@ -79,6 +81,16 @@ namespace Test_client
             {
                 SetLevel sl = data.GetValue<SetLevel>();
                 Console.WriteLine($"New level selected, group: {sl.GroupName}, song: {sl.SongName}, with difficulty: {sl.Difficulty}");
+            });
+
+            client.On("GetLobbyList", data =>
+            {
+                Console.WriteLine("Got lobbies:");
+                List<Lobby> lobbies = data.GetValue<List<Lobby>>(0);
+                foreach (var item in lobbies)
+                {
+                    Console.WriteLine($"Lobby: {item.Id} with: {item.Players.Count} players");
+                }
             });
 
             client.On("StartGame", data => {
@@ -132,12 +144,16 @@ namespace Test_client
                         CreateLobby();
                         break;
                     case ConsoleKey.H:
-
                         WriteHelp();
                         break;
                     case ConsoleKey.F1:
                         StartGame();
                         break;
+                    case ConsoleKey.F2:
+                        client.EmitAsync("GetLobbyList");
+                        Console.WriteLine();
+                        break;
+
                     default:
                         break;
                 }
@@ -188,7 +204,7 @@ namespace Test_client
 
         static void LeaveLobby()
         {
-            client.EmitAsync("LeaveLobby", player, "TEST");
+            client.EmitAsync("LeaveLobby", player, "test");
         }
 
         static void StartGame()
