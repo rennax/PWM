@@ -174,11 +174,28 @@ namespace PWM
                 PWM.Messages.StartGame msg = data.GetValue<PWM.Messages.StartGame>();
                 Action<object> startGameAction = (object startGame) =>
                 {
-                    PWM.Messages.StartGame sg = (PWM.Messages.StartGame)startGame;
+                    PWM.Messages.StartGame sg = (Messages.StartGame)startGame;
                     Messenger.Default.Send(sg);
                 };
 
                 UnityTaskScheduler.Factory.StartNew(startGameAction, msg);
+            });
+
+            client.On("PlayerReady", data =>
+            {
+                Messages.Player msg = data.GetValue<Messages.Player>(0);
+
+                Action<object> playerReadyAction = (object player) =>
+                {
+                    MelonLogger.Msg("PlayerReady event");
+                    Messages.PlayerReady playload = new Messages.PlayerReady{
+                         Player = (Messages.Player)player
+                    };
+
+                    Messenger.Default.Send(playload);
+                };
+
+                UnityTaskScheduler.Factory.StartNew(playerReadyAction, msg);
             });
 
             client.On("OnScoreSync", data => {

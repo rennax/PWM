@@ -18,6 +18,7 @@ namespace PWM
         private TMP_Text hitAcc;
         private TMP_Text beatAcc;
         private TMP_Text score;
+        private Transform readyIcon;
 
         void Awake()
         {
@@ -25,6 +26,8 @@ namespace PWM
             score = transform.FindChild("Score").GetComponent<TMP_Text>();
             beatAcc = transform.FindChild("BeatAcc").GetComponent<TMP_Text>();
             hitAcc = transform.FindChild("HitAcc").GetComponent<TMP_Text>();
+            readyIcon = transform.FindChild("Ready_Icon");
+            IsReady(false);
 
             UpdateEntry(new Messages.ScoreSync { Score = 0, HitAccuracy = 0, BeatAccuracy = 0 }); 
         }
@@ -34,6 +37,11 @@ namespace PWM
             score.text = $"{scoreSync.Score}";
             beatAcc.text = $"{scoreSync.BeatAccuracy*100:0.00} %";
             hitAcc.text = $"{scoreSync.HitAccuracy*100:0.00} %";
+        }
+
+        public void IsReady(bool ready)
+        {
+            readyIcon.gameObject.SetActive(ready);
         }
     }
 }

@@ -29,6 +29,7 @@ namespace PWM
         public override void OnApplicationStart()
         {
             //Register custom types
+            ClassInjector.RegisterTypeInIl2Cpp<GameStartTimer>();
             ClassInjector.RegisterTypeInIl2Cpp<ScoreDisplay>();
             ClassInjector.RegisterTypeInIl2Cpp<LobbyManager>();
             ClassInjector.RegisterTypeInIl2Cpp<LobbyPreviewEntry>();
@@ -48,8 +49,13 @@ namespace PWM
 
 
 
-            //global::Messenger.Default.Register<global::Messages.GameStartEvent>(new Action<global::Messages.GameStartEvent>(OnGameStart));
+            global::Messenger.Default.Register<global::Messages.PlayButtonIsEnabledForIntent>(new Action<global::Messages.PlayButtonIsEnabledForIntent>(OnPlayButtonIsEnabled));
 
+        }
+
+        private void OnPlayButtonIsEnabled(global::Messages.PlayButtonIsEnabledForIntent obj)
+        {
+            MelonLogger.Msg($"PlayButtonIsEnabledForIntent Event, IsEnabled: {obj.IsEnabled}, Intent: {obj.Intent}");
         }
 
         //private void OnGameStart(global::Messages.GameStartEvent obj)

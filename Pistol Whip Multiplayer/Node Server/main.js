@@ -4,6 +4,7 @@ const httpServer = http.createServer();
 const socket = require('socket.io');
 const { join } = require('path');
 const { Console } = require('console');
+const { setUncaughtExceptionCaptureCallback } = require('process');
 
 var io = socket(httpServer, {
   pingInterval: 10000,
@@ -56,6 +57,7 @@ io.on('connection', function(socket){
       lobby.Host = player;
       if (!lobby.Players)
         lobby.Players = []
+      lobby.GameStarts = 0;
       lobby.Players.push(player);
       lobbies.push(lobby);
       socket.join(lobby.Id);
@@ -86,6 +88,12 @@ io.on('connection', function(socket){
         //socket.emit("LevelSelected", lobbyLevelDict[lobby.Id]);
         console.log(`Player ${player.Name} joined ${lobbyId}`);
         addSocketToLobby(lobby, player, socket);
+
+        //Send start event, if game is already starting, but not started yet
+        if (lobby.GameStarts > Date.now())
+        {
+          startGameSinglePlayer(socket, lobby.GameStarts-Date.now());
+        }
       }
       else
       {
@@ -152,12 +160,45 @@ io.on('connection', function(socket){
 
     });
 
-
-    socket.on("StartGame", (lobbyId, startGame) => {
+    socket.on("PlayerReady", (lobbyId, _player, ready) => {
       let lobby = lobbies.find(e => e.Id === lobbyId);
       if (lobby) {
-        io.in(lobby.Id).emit("StartGame", startGame);
-        console.log(`Lobby ${lobby.Id} started game with delay: ${startGame}`);
+        let player = lobby.Players.find(p => p.Name === _player.Name);
+        if (player) {
+          player.Ready = ready;
+          io.in(lobby.Id).emit("PlayerReady", player);
+          
+          //Check that game is starting in the future and that the count down time is larger than
+          //that if all play7ers where ready (5s)
+          if (lobby.GameStarts > Date.now() && lobby.GameStarts > Date.now() + 5*1000) {
+            if (lobby.Players.every(p => p.Ready === true)) {
+              startGame(lobby, 5*1000);
+            }
+            
+          }
+
+          console.log(`In Lobby ${lobby.Id} Player is: ${ready}`);
+        }
+        else {
+          console.log(`PlayerReady: In Lobby ${lobby.Id} Player: ${_player.Name} does not exist, but tried to say he is ready`);
+        }
+        
+      }
+      else
+       console.log(`${_player.Name} tried to say is is ready in: ${lobbyId}, but that lobby does not exist`);
+    });
+
+    socket.on("StartGame", (lobbyId) => {
+      let lobby = lobbies.find(e => e.Id === lobbyId);
+      if (lobby) {
+        let delayMS = 5 * 1000;
+        if (lobby.Players.some(p => p.Ready === false))
+        {
+          delayMS = 30*1000;
+        }
+
+        startGame(lobby, delayMS);
+        console.log(`Lobby ${lobby.Id} started game with delay: ${delayMS/1000}`);
       }
       else
        console.log(`failed to start game because lobby with id: ${lobbyId}, does not exist`);
@@ -177,6 +218,24 @@ io.on('connection', function(socket){
 httpServer.listen(port, () => {
   console.log("Listening on *:" + port);
 });
+
+function startGameSinglePlayer(socket, delayMS)
+{
+  let startGame = {
+    DelayMS: delayMS
+  };
+
+  socket.emit("StartGame", startGame);
+}
+
+function startGame(lobby, delayMS)
+{
+  let startGame = {
+    DelayMS: delayMS
+  };
+  lobby.GameStarts = Date.now() + delayMS;
+  io.in(lobby.Id).emit("StartGame", startGame);
+}
 
 function deleteLobby(lobbyId) {
   var index = lobbies.findIndex(e => e.Id === lobbyId);

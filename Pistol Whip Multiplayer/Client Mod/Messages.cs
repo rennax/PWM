@@ -55,6 +55,7 @@ namespace PWM
         public class Player
         {
             public string Name { get; set; }
+            public bool Ready { get; set; }
         }
 
         public class PlayerLeft
@@ -63,6 +64,11 @@ namespace PWM
         }
 
         public class PlayerJoined
+        {
+            public Player Player { get; set; }
+        }
+
+        public class PlayerReady
         {
             public Player Player { get; set; }
         }

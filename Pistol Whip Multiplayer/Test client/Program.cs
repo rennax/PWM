@@ -1,36 +1,75 @@
 ﻿using System;
-using SocketIOSharp.Client;
-using SocketIOSharp.Common;
-using EngineIOSharp.Common.Enum;
-using Newtonsoft.Json.Linq;
+using SocketIOClient;
 using PWM;
 using PWM.Network.Messages;
+using System.Collections.Generic;
 
 namespace Test_client
 {
     class Program
     {
-        static SocketIOClient client;
-        static void Main(string[] args)
+        static SocketIO client;
+
+        static string helpText =
+            "Press 1 to select level\n" +
+            "Press Esc to exit application\n" +
+            "Press F1 to start game\n";
+
+        static async System.Threading.Tasks.Task Main(string[] args)
         {
             Console.WriteLine("Hello World!");
             ConsoleKeyInfo key;
+            #region Client
 
-            client = new SocketIOClient(
-                new SocketIOClientOption(EngineIOScheme.http, "localhost", 9001)
-            );
+            System.Diagnostics.Trace.Listeners.Add(new MelonListener());
 
-            client.On(SocketIOEvent.CONNECTION, () =>
+
+            client = new SocketIO("http://localhost:3000", new SocketIOOptions
             {
-                Console.WriteLine("Connected to server");
+                EIO = 4
             });
 
-            client.On(SocketIOEvent.DISCONNECT, () =>
+            client.OnConnected += (sender, e) => {
+                Console.WriteLine("Connected to server");
+            };
+
+            client.OnDisconnected += (sender, e) =>
             {
                 Console.WriteLine("Disconnected from server");
+            };
+
+
+            client.On("PlayerJoinedLobby", data => {
+                Player player = data.GetValue<Player>();
+                Console.WriteLine($"Player with name: {player.Name}, joined lobby");
             });
 
-            client.Connect();
+            client.On("PlayerLeftLobby", data => {
+                Player player = data.GetValue<Player>();
+                Console.WriteLine($"Player with name: {player.Name}, left lobby");
+            });
+
+            client.On("OnLevelSelected", data =>
+            {
+                SelectLevel sl = data.GetValue<SelectLevel>();
+                Console.WriteLine($"New level selected, group: {sl.GroupName}, index: {sl.Index}, with difficulty: {sl.Difficulty}");
+            });
+
+            client.On("OnGameStart", data => {
+                StartGame sg = data.GetValue<StartGame>();
+                Console.WriteLine("Game started");
+
+            });
+
+            client.On("OnScoreSync", data => {
+
+                Player player = data.GetValue<Player>(0);
+                ScoreSync scoreSync = data.GetValue<ScoreSync>(1);
+
+            });
+
+            await client.ConnectAsync();
+            #endregion client
 
             do
             {
@@ -40,10 +79,10 @@ namespace Test_client
                     case ConsoleKey.Clear:
                         break;
                     case ConsoleKey.Enter:
-                        
+
                         break;
                     case ConsoleKey.D0:
-                        
+                        CreateLobby();
                         break;
                     case ConsoleKey.D1:
                         SelectLevel();
@@ -51,7 +90,7 @@ namespace Test_client
                     case ConsoleKey.D2:
                         break;
                     case ConsoleKey.H:
-                        
+
                         WriteHelp();
                         break;
                     case ConsoleKey.F1:
@@ -65,13 +104,25 @@ namespace Test_client
             } while (key.Key != ConsoleKey.Escape);
         }
 
+        static void CreateLobby()
+        {
+            Console.WriteLine(client.Connected);
+            Lobby lobby = new Lobby
+            {
+                Id = "test"
+            };
+            client.EmitAsync("CreateLobby", lobby);
+        }
+
+
+
         static void StartGame()
         {
             StartGame startGame = new StartGame
             {
-                delayMS = 2000,
+                DelayMS = 2000,
             };
-            client.Emit("start_game", startGame);
+            client.EmitAsync("OnStartGame", startGame);
         }
 
         static void SelectLevel()
@@ -80,7 +131,7 @@ namespace Test_client
             Console.WriteLine("Press 1 for classic index 2 diff normal");
             Console.WriteLine("Press 2 for Heartbreaker index 1 diff easy");
             Console.WriteLine("Press 3 for Reloaded index 3 diff hard");
-            
+
 
 
             SelectLevel selectLevel = null;
@@ -90,17 +141,17 @@ namespace Test_client
                 case ConsoleKey.D1:
                     selectLevel = new SelectLevel
                     {
-                        groupName = "Classic",
-                        index = 2,
-                        difficulty = 1
+                        GroupName = "Classic",
+                        Index = 2,
+                        Difficulty = 1
                     };
                     break;
                 case ConsoleKey.D2:
                     selectLevel = new SelectLevel
                     {
-                        groupName = "Heartbreaker",
-                        index = 17,
-                        difficulty = 0
+                        GroupName = "Heartbreaker",
+                        Index = 17,
+                        Difficulty = 0
                     };
                     break;
                 case ConsoleKey.D3:
@@ -108,26 +159,32 @@ namespace Test_client
                 default:
                     selectLevel = new SelectLevel
                     {
-                        groupName = "Reloaded",
-                        index = 12,
-                        difficulty = 2
+                        GroupName = "Reloaded",
+                        Index = 12,
+                        Difficulty = 2
                     };
                     break;
             }
 
-            client.Emit("select_level", selectLevel);
+            client.EmitAsync("OnLevelSelected", selectLevel);
         }
 
         static void WriteHelp()
         {
-            
             Console.Write(helpText);
         }
 
+        class MelonListener : System.Diagnostics.TraceListener
+        {
+            public override void Write(string message)
+            {
+                Console.WriteLine(message);
+            }
 
-        static string helpText =
-            "Press 1 to select level\n" + 
-            "Press Esc to exit application\n" + 
-            "Press F1 to start game\n";
+            public override void WriteLine(string message)
+            {
+                Console.WriteLine(message);
+            }
+        }
     }
 }

@@ -7,6 +7,7 @@ using UnityEngine;
 
 using MelonLoader;
 using TMPro;
+using UnityEngine.UI;
 using HarmonyLib;
 
 namespace PWM
@@ -21,6 +22,14 @@ namespace PWM
         private static Messages.Lobby curLobby;
         private TMP_Text lobbyTitle;
 
+        private Transform readyButton;
+        private Transform notReadyButton;
+        private Transform startButton;
+        private Image readyIconImg;
+
+        private GameStartTimer gameStartTimer;
+        
+
         //Player name is key
         private Dictionary<string, PlayerEntry> players = new Dictionary<string, PlayerEntry>();
         private Transform playersParent;
@@ -33,6 +42,7 @@ namespace PWM
             Difficulty = 0
         };
 
+        static bool catchStarting = true;
 
         float time = 0;
         float tickRate = 1f;
@@ -56,11 +66,30 @@ namespace PWM
 
         void Awake()
         {
+            //Configure UI
             UnityEventTrigger leaveOnClickEvent = transform.FindChild("Leave/PF_PWM_Trigger_UnityEvents/PF_UnityEventTrigger_OnClick").GetComponent<UnityEventTrigger>();
             leaveOnClickEvent.Event.AddListener(new Action(LeaveLobby));
 
-            UnityEventTrigger startGameOnClickEvent = transform.FindChild("Start/PF_PWM_Trigger_UnityEvents/PF_UnityEventTrigger_OnClick").GetComponent<UnityEventTrigger>();
+            startButton = transform.FindChild("Start/PF_PWM_Trigger_UnityEvents/PF_UnityEventTrigger_OnClick");
+            UnityEventTrigger startGameOnClickEvent = startButton.GetComponent<UnityEventTrigger>();
             startGameOnClickEvent.Event.AddListener(new Action(TriggerStartGame));
+            startButton.gameObject.SetActive(false);
+
+            readyButton = transform.FindChild("Ready");
+            UnityEventTrigger isReadyOnClickEvent = readyButton.FindChild("PF_PWM_Trigger_UnityEvents/PF_UnityEventTrigger_OnClick").GetComponent<UnityEventTrigger>();
+            isReadyOnClickEvent.Event.AddListener(new Action(TriggerIsReady));
+            readyButton.gameObject.SetActive(false);
+
+            notReadyButton = transform.FindChild("Not_Ready");
+            UnityEventTrigger isNotReadyOnClickEvent = notReadyButton.FindChild("PF_PWM_Trigger_UnityEvents/PF_UnityEventTrigger_OnClick").GetComponent<UnityEventTrigger>();
+            isNotReadyOnClickEvent.Event.AddListener(new Action(TriggerIsNotReady));
+            notReadyButton.gameObject.SetActive(false);
+
+            readyIconImg = transform.FindChild("Ready_Icon/Image").GetComponent<Image>();
+            readyIconImg.gameObject.SetActive(false);
+
+            gameStartTimer = transform.FindChild("Timer").GetComponent<GameStartTimer>();
+            gameStartTimer.gameObject.SetActive(false);
 
             playerEntryPrefab = Entry.assets.playerEntry;
             playersParent = transform.FindChild("Player_List").transform;
@@ -68,6 +97,7 @@ namespace PWM
 
             actionManager = GameObject.Find("Managers/PlayerActionManager").GetComponent<PlayerActionManager>();
 
+            //Setup message listeners
             Messenger.Default.Register(new Action<Messages.PlayerJoined>(OnPlayerJoinedLobby));
             Messenger.Default.Register(new Action<Messages.PlayerLeft>(OnPlayerLeftLobby));
             Messenger.Default.Register(new Action<Messages.CreatedLobby>(OnCreatedLobby));
@@ -77,6 +107,8 @@ namespace PWM
             Messenger.Default.Register(new Action<Messages.UpdateScore>(OnScoreSync));
             Messenger.Default.Register(new Action<Messages.StartGame>(OnStartGame));
             Messenger.Default.Register(new Action<Messages.NewModifiers>(OnLobbyModifiersSet));
+            Messenger.Default.Register(new Action<Messages.PlayerReady>(OnPlayerReady));
+            
 
 
             global::Messenger.Default.Register<global::Messages.SelectFeatureSetSO>(new Action<global::Messages.SelectFeatureSetSO>(OnSceneSetSelect));
@@ -110,6 +142,15 @@ namespace PWM
 
                     Client.client.EmitAsync("ScoreUpdate", CurrentLobby.Id, msg);
                 }
+            }
+        }
+        private void OnPlayerReady(Messages.PlayerReady obj)
+        {
+            PlayerEntry player;
+            MelonLogger.Msg($"{obj.Player.Name} is ready? {obj.Player.Ready}");
+            if (players.TryGetValue(obj.Player.Name, out player))
+            {
+                player.IsReady(obj.Player.Ready);
             }
         }
 
@@ -153,7 +194,11 @@ namespace PWM
 
         void OnGameStart(global::Messages.GameStartEvent msg)
         {
-            time = Time.time;
+            if(curLobby != null)
+            {
+                time = Time.time;
+                TriggerIsNotReady(); // Reset player ready status when game starts
+            }
         }
 
         private void OnGameCompletedScoreEvent(global::Messages.CompletedGameScoreEvent obj)
@@ -272,6 +317,8 @@ namespace PWM
                 SetLevel(curLobby.Level);
             }
 
+            readyButton.gameObject.SetActive(true);
+
             MelonLogger.Msg("JoinedLobby called");
         }
 
@@ -289,7 +336,9 @@ namespace PWM
             {
                 PlayerEntry playerEntry = Instantiate(playerEntryPrefab, playersParent);
                 playerEntry.Name = playerName;
+                playerEntry.IsReady(false);
                 players.Add(playerName, playerEntry);
+                playerEntry.IsReady(player.Ready);
             }
             else
             {
@@ -305,6 +354,7 @@ namespace PWM
             {
                 AddPlayer(player);
             }
+            readyButton.gameObject.SetActive(true);
             MelonLogger.Msg("ONCreatedLobby called");
         }
 
@@ -344,6 +394,17 @@ namespace PWM
         {
             MelonLogger.Msg("Start Game");
 
+            gameStartTimer.gameObject.SetActive(true);
+            float delay = obj.DelayMS / 1000;
+            gameStartTimer.SetTimer(delay);
+            CancelInvoke("DelayedGameStart"); //Handle cases where we go from not all ready(30s), to all ready(5s)
+            Invoke("DelayedGameStart", delay);
+            
+        }
+
+        private void DelayedGameStart()
+        {
+            catchStarting = false;
             PlayButtonManager playBtnManager = GameObject.Find("Managers/UI State Controller/PF_CHUI_AnchorPt_SongSelection/PF_SongSelectionCanvas_UIv2/ForwardInfoBoard/DiffPlay/StartButton").GetComponent<PlayButtonManager>();
             playBtnManager.PlayButtonButtonHander();
         }
@@ -369,10 +430,15 @@ namespace PWM
             {
                 Destroy(item.gameObject);
             }
-            
+
+            //Make sure we are reset when we get into lobby again
+            TriggerIsNotReady();
+
+            //Make sure game is not started if we leave while game start is in progress.
+            CancelInvoke("DelayedGameStart");
+
+
             curLobby = null;
-
-
             lobbyManager.ShowLobbyListCanvas();
         }
 
@@ -391,6 +457,32 @@ namespace PWM
 
         }
 
+        void TriggerIsReady()
+        {
+            MelonLogger.Msg("TriggerIsReady called");
+            readyButton.gameObject.SetActive(false);
+            //Once host is ready, he can only start game
+            //TODO reset host ready status when he/she selects new map
+            if (IsHost)
+                startButton.gameObject.SetActive(true);
+            else
+                notReadyButton.gameObject.SetActive(true);
+            readyIconImg.gameObject.SetActive(true);
+            Client.client.EmitAsync("PlayerReady", CurrentLobby.Id, lobbyManager.Player, true);
+        }
+
+        void TriggerIsNotReady()
+        {
+            MelonLogger.Msg("TriggerIsNotReady called");
+            readyButton.gameObject.SetActive(true);
+            notReadyButton.gameObject.SetActive(false);
+            readyIconImg.gameObject.SetActive(false);
+            startButton.gameObject.SetActive(false);
+            Client.client.EmitAsync("PlayerReady", CurrentLobby.Id, lobbyManager.Player, false);
+        }
+
+
+        #region SET_GAME
         //Times might depend on the speed of the client. To test
         public void SetLevel(Messages.Network.SetLevel setLevel)
         {
@@ -461,5 +553,24 @@ namespace PWM
             }
         }
 
+        //We want to avoid the user starting manually while in lobby. 
+        //To do this, we prefix hook the start button function and
+        //only if the game is actually starting, do we pass the call down
+        //to original.
+        //If we are not currently in a lobby, we should just allow the original to be called,
+        //to not disrupt singleplayer gameplay
+        [HarmonyPatch(typeof(PlayButtonManager), "PlayButtonButtonHander", new Type[0] { })]
+        private static class PlayButtonManager_Mod
+        {
+            public static bool Prefix(PlayButtonManager __instance)
+            {
+                if (catchStarting == false || curLobby == null)
+                {
+                    return true;
+                }
+                return false;
+            }
+        }
+        #endregion
     }
 }

@@ -12,9 +12,18 @@ namespace Test_client
         static SocketIO client;
 
         static string helpText =
-            "Press 1 to select level\n" +
+            "Press 1 to join lobby with ID 'test'\n" + 
+            "Press 2 to select level\n" +
+            "Press 3 to Select Difficulty\n" +
+            "Press 4 to Set Modifier\n" +
+            "Press 5 to Set Ready\n" +
+            "Press 9 to Leave Lobby\n" +
+            "Press 0 to Create Lobby with ID 'TEST'\n" + 
             "Press Esc to exit application\n" +
             "Press F1 to start game\n";
+
+
+
         static SetLevel setLevel = null;
         public static Player player = new Player { Name = "Test" };
         static Lobby lobby; 
@@ -48,7 +57,7 @@ namespace Test_client
             });
 
             client.On("JoinedLobby", data => {
-                Lobby lobby = data.GetValue<Lobby>();
+                lobby = data.GetValue<Lobby>();
                 Console.WriteLine($"successfully joined lobby {lobby.Id} with {lobby.Players.Count} players and host is {lobby.Host.Name}");
             });
 
@@ -83,6 +92,11 @@ namespace Test_client
                 Console.WriteLine($"{score.Player.Name}: updated score: {score.Score.Score}, acc: {score.Score.HitAccuracy}, beat: {score.Score.BeatAccuracy}");
             });
 
+            client.On("PlayerReady", data => {
+                Player _player = data.GetValue<Player>(0);
+                Console.WriteLine($"Player: {_player.Name}, is ready? {_player.Ready}");
+            });
+
             client.ConnectAsync();
             #endregion client
 
@@ -108,6 +122,9 @@ namespace Test_client
                     case ConsoleKey.D4:
                         SetModifier();
                         break;
+                    case ConsoleKey.D5:
+                        SetReady();
+                        break;
                     case ConsoleKey.D9:
                         LeaveLobby();
                         break;
@@ -127,6 +144,28 @@ namespace Test_client
 
                 Console.WriteLine("");
             } while (key.Key != ConsoleKey.Escape);
+        }
+
+        private static void SetReady()
+        {
+            Console.WriteLine("\nPress enter to select default test level");
+            Console.WriteLine("Press 1 for Not Ready");
+            Console.WriteLine("Press 2 for Ready");
+            bool ready = false;
+            switch(Console.ReadKey().Key)
+            {
+                case ConsoleKey.D1:
+                    ready = false;
+                    break;
+                case ConsoleKey.D2:
+                    ready = true;
+                    break;
+                default:
+                    break;
+            }
+
+            Console.WriteLine();
+            client.EmitAsync("PlayerReady", lobby.Id, player, ready);
         }
 
         static void CreateLobby()
@@ -154,11 +193,7 @@ namespace Test_client
 
         static void StartGame()
         {
-            StartGame startGame = new StartGame
-            {
-                DelayMS = 2000,
-            };
-            client.EmitAsync("OnStartGame", startGame);
+            client.EmitAsync("StartGame", lobby.Id);
         }
 
         static void SelectLevel()
@@ -232,6 +267,7 @@ namespace Test_client
             Console.WriteLine("\nPress enter to select default test level");
             Console.WriteLine("Press 1 for Pistol + Dual");
             Console.WriteLine("Press 2 for Revolver + Deadeye");
+            Console.WriteLine("Press 3 for dual burst bottomless heavies bullet hell");
 
             switch (Console.ReadKey().Key)
             {
@@ -240,6 +276,9 @@ namespace Test_client
                     break;
                 case ConsoleKey.D2:
                     lobby.Modifiers = new List<string>() { "Revolver", "Deadeye" };
+                    break;
+                case ConsoleKey.D3:
+                    lobby.Modifiers = new List<string>() { "Burst", "Dual Wield", "Bullet Hell" };
                     break;
                 default:
                     break;
@@ -251,6 +290,7 @@ namespace Test_client
         }
         static void WriteHelp()
         {
+            Console.WriteLine();
             Console.Write(helpText);
         }
 

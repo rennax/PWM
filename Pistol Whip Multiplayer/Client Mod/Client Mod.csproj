@@ -155,6 +155,7 @@
     <Compile Include="Client.cs" />
     <Compile Include="Config.cs" />
     <Compile Include="Custom Types\CreateLobby.cs" />
+    <Compile Include="Custom Types\GameStartTimer.cs" />
     <Compile Include="Custom Types\LobbyList.cs" />
     <Compile Include="Custom Types\LobbyManager.cs" />
     <Compile Include="Custom Types\LobbyOverview.cs" />
