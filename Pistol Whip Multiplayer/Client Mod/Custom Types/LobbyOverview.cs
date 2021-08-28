@@ -70,8 +70,8 @@ namespace PWM
             UnityEventTrigger leaveOnClickEvent = transform.FindChild("Leave/PF_PWM_Trigger_UnityEvents/PF_UnityEventTrigger_OnClick").GetComponent<UnityEventTrigger>();
             leaveOnClickEvent.Event.AddListener(new Action(LeaveLobby));
 
-            startButton = transform.FindChild("Start/PF_PWM_Trigger_UnityEvents/PF_UnityEventTrigger_OnClick");
-            UnityEventTrigger startGameOnClickEvent = startButton.GetComponent<UnityEventTrigger>();
+            startButton = transform.FindChild("Start");
+            UnityEventTrigger startGameOnClickEvent = startButton.FindChild("PF_PWM_Trigger_UnityEvents/PF_UnityEventTrigger_OnClick").GetComponent<UnityEventTrigger>();
             startGameOnClickEvent.Event.AddListener(new Action(TriggerStartGame));
             startButton.gameObject.SetActive(false);
 
