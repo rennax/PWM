@@ -566,6 +566,7 @@ namespace PWM
             {
                 if (catchStarting == false || curLobby == null)
                 {
+                    catchStarting = true;
                     return true;
                 }
                 return false;
