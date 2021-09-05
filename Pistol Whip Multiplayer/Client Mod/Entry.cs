@@ -21,6 +21,8 @@ namespace PWM
         Client client;
 
         static GameObject lobbyPanel;
+        static GameObject keyboard;
+        static Keyboard.VRKeyboardManager keyboardManager;
 
         public static Assets assets = new Assets();
 
@@ -28,7 +30,7 @@ namespace PWM
 
         public override void OnApplicationStart()
         {
-            //Register custom types
+            //Register custom types for PWM
             ClassInjector.RegisterTypeInIl2Cpp<GameStartTimer>();
             ClassInjector.RegisterTypeInIl2Cpp<ScoreDisplay>();
             ClassInjector.RegisterTypeInIl2Cpp<LobbyManager>();
@@ -38,6 +40,12 @@ namespace PWM
             ClassInjector.RegisterTypeInIl2Cpp<PlayerCount>();
             ClassInjector.RegisterTypeInIl2Cpp<LobbyOverview>();
             ClassInjector.RegisterTypeInIl2Cpp<PlayerEntry>();
+
+            //Register custom types for VRKeyboard
+            ClassInjector.RegisterTypeInIl2Cpp<Keyboard.VRKeyboardManager>();
+            ClassInjector.RegisterTypeInIl2Cpp<Keyboard.VRKey>();
+            ClassInjector.RegisterTypeInIl2Cpp<Keyboard.VRKeyDelete>();
+            ClassInjector.RegisterTypeInIl2Cpp<Keyboard.VRKeyOK>();
 
             //Init taskscheduler on unity thread
             UnityTaskScheduler.mainThread = Thread.CurrentThread;
@@ -49,8 +57,12 @@ namespace PWM
 
 
 
-            global::Messenger.Default.Register<global::Messages.PlayButtonIsEnabledForIntent>(new Action<global::Messages.PlayButtonIsEnabledForIntent>(OnPlayButtonIsEnabled));
+            //global::Messenger.Default.Register<global::Messages.PlayButtonIsEnabledForIntent>(new Action<global::Messages.PlayButtonIsEnabledForIntent>(OnPlayButtonIsEnabled));
+        }
 
+        private void OnGameCompletedScoreEvent(global::Messages.CompletedGameScoreEvent obj)
+        {
+            MelonLogger.Msg($"OnGameCompletedScoreEvent Event, score: {obj.data.score}, complete: {obj.data.songComplete}");
         }
 
         private void OnPlayButtonIsEnabled(global::Messages.PlayButtonIsEnabledForIntent obj)
@@ -125,9 +137,21 @@ namespace PWM
             SetSPShaderForTMP(lobbyPanelPrefab);
             lobbyPanel = UnityEngine.Object.Instantiate(lobbyPanelPrefab);
 
+
+
+            bundle = Il2CppAssetBundleManager.LoadFromFile("Mods/PWM/Keyboard");
+            GameObject keyboardPrefab = bundle.Load<GameObject>("Keyboard_Canvas");
+            keyboard = UnityEngine.Object.Instantiate(keyboardPrefab);
+            keyboardManager = keyboard.GetComponent<Keyboard.VRKeyboardManager>();
+
             //Fix to single pass render
             SetSPShaderForTMP(assets.lobbyPreviewEntry.gameObject);
             SetSPShaderForTMP(assets.playerEntry.gameObject);
+            SetSPShaderForTMP(keyboard);
+
+            //keyboard.SetActive(false);
+
+
         }
 
         //Avoid double render because of multi pass rendering being applied

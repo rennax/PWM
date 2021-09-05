@@ -45,6 +45,7 @@ namespace PWM
             transform.position = new Vector3(0, 1.4f, -2.5f);
             transform.rotation = Quaternion.Euler(0, 180, 0);
 
+
             lobbyList = this.transform.FindChild("Mesh/PWM_Lobby_List_Canvas").GetComponent<LobbyList>();
             lobbyList.lobbyManager = this;
 
@@ -59,10 +60,26 @@ namespace PWM
             Messenger.Default.Register(new Action<Messages.JoinedLobby>(OnJoinedLobby));
             Messenger.Default.Register(new Action<Messages.Disconnected>(OnDisconnected));
 
+
+            global::Messenger.Default.Register<global::Messages.GameScoreEvent>(new Action<global::Messages.GameScoreEvent>(OnGameEndEvent));
+            global::Messenger.Default.Register<global::Messages.GameStartEvent>(new Action<global::Messages.GameStartEvent>(OnGameStartEvent));
+
 #if DEBUG
             Invoke("SkipIntro", 4);
             //Invoke("AutoJoin", 5);
 #endif
+        }
+
+        private void OnGameStartEvent(global::Messages.GameStartEvent obj)
+        {
+            MelonLogger.Msg("Disabling Multiplayer panel as game started");
+            this.gameObject.SetActive(false);
+        }
+
+        private void OnGameEndEvent(global::Messages.GameScoreEvent obj)
+        {
+            MelonLogger.Msg("Enabling Multiplayer panel as game ended");
+            this.gameObject.SetActive(true);
         }
 
         //If we disconnect, just disable any active UI
@@ -71,24 +88,6 @@ namespace PWM
             lobbyOverview.CurrentLobby = null;
             ShowLobbyListCanvas();
         }
-
-        //void Update()
-        //{
-
-        //    Event e = Event.current;
-        //    if (e.isKey && e.keyCode == KeyCode.F1)
-        //    {
-        //        GameplayDatabase DB = GameplayManager.gameplayDB;
-        //        var modifiers = new List<GameModifierEntry>();
-        //        modifiers.Add(DB.AllModifiers[3]); //Duals
-        //        modifiers.Add(DB.AllModifiers[9]); //Disorder
-        //        modifiers.Add(DB.AllModifiers[16]); //Revolver
-
-
-
-
-        //    }
-        //}
 
         void OnJoinedLobby(Messages.JoinedLobby msg)
         {

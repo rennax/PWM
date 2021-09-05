@@ -329,7 +329,7 @@ namespace PWM
             lobbyManager.ShowLobbyListCanvas();
         }
 
-        void AddPlayer(PWM.Messages.Player player)
+        void AddPlayer(Messages.Player player)
         {
             string playerName = player.Name;
             if (!players.ContainsKey(playerName))
@@ -431,6 +431,8 @@ namespace PWM
                 Destroy(item.gameObject);
             }
 
+            curLobby = null;
+
             //Make sure we are reset when we get into lobby again
             TriggerIsNotReady();
 
@@ -438,7 +440,6 @@ namespace PWM
             CancelInvoke("DelayedGameStart");
 
 
-            curLobby = null;
             lobbyManager.ShowLobbyListCanvas();
         }
 
@@ -478,7 +479,10 @@ namespace PWM
             notReadyButton.gameObject.SetActive(false);
             readyIconImg.gameObject.SetActive(false);
             startButton.gameObject.SetActive(false);
-            Client.client.EmitAsync("PlayerReady", CurrentLobby.Id, lobbyManager.Player, false);
+
+            //If we are leaving lobby, the lobby will be null and we do not wish to send this
+            if(CurrentLobby != null)
+                Client.client.EmitAsync("PlayerReady", CurrentLobby.Id, lobbyManager.Player, false);
         }
 
 

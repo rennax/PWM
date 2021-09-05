@@ -248,9 +248,21 @@ namespace PWM
         //Host must write the name using keyboard
         private void OnInputSelect()
         {
-            MelonLogger.Msg("Selected lobby name input field");
-            lobbyNameInput.ActivateInputField();
+            MelonLogger.Msg("Selected lobby name input field. Creating VR keyboard");
+            Vector3 posAdjust = lobbyManager.transform.position;
+            posAdjust.z += 0.1f;
+            var keyboard = Keyboard.VRKeyboardManager.Default;
+            keyboard.SetPlacement(posAdjust, lobbyManager.transform.rotation);
+            keyboard.Listen(LobbyNameUpdated);
+
+            //lobbyNameInput.ActivateInputField();
             //lobbyNameInput.Select();
+        }
+
+        private void LobbyNameUpdated(string name)
+        {
+            MelonLogger.Msg($"Set new lobby name {name}");
+            lobbyNameInput.text = name;
         }
 
         private void OnCreateLobby()

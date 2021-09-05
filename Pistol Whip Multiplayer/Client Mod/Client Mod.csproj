@@ -156,6 +156,10 @@
     <Compile Include="Config.cs" />
     <Compile Include="Custom Types\CreateLobby.cs" />
     <Compile Include="Custom Types\GameStartTimer.cs" />
+    <Compile Include="Custom Types\Keyboard\VRKey.cs" />
+    <Compile Include="Custom Types\Keyboard\VRKeyboardManager.cs" />
+    <Compile Include="Custom Types\Keyboard\VRKeyDelete.cs" />
+    <Compile Include="Custom Types\Keyboard\VRKeyOK.cs" />
     <Compile Include="Custom Types\LobbyList.cs" />
     <Compile Include="Custom Types\LobbyManager.cs" />
     <Compile Include="Custom Types\LobbyOverview.cs" />
