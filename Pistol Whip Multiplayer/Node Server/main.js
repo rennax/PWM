@@ -141,19 +141,20 @@ io.on('connection', function(socket){
       if (lobby) {
         lobby.Level = setLevel;
         socket.to(lobby.Id).emit("LevelSelected", setLevel);
-        console.log(`Lobby selected level in group ${setLevel.GroupName} with index ${setLevel.SongName} for difficulty ${setLevel.Difficulty}`);
+        console.log(`Lobby selected level with BaseName ${setLevel.BaseName} for difficulty ${setLevel.Difficulty}`);
       }
       else
       console.log(`failed to set new selected level because lobby with id: ${lobbyId}, does not exist`);
     });
     
     //TODO handle seed data from mods that are random by nature
-    socket.on("SetModifiers", (lobbyId, modifiers) => {
+    socket.on("SetModifiers", (lobbyId, bitPackedModifiers) => {
       let lobby = lobbies.find(e => e.Id === lobbyId);
       if (lobby) {
-        lobby.Modifiers = modifiers;
-        socket.to(lobby.Id).emit("SetModifiers", lobby.Modifiers);
-        console.log(`Lobby host of ${lobby.Id} selected ${modifiers} as modifiers`);
+        lobby.Level.BitPackedModifiers = bitPackedModifiers;
+
+        socket.to(lobby.Id).emit("SetModifiers", lobby.Level.BitPackedModifiers);
+        console.log(`Lobby host of ${lobby.Id} selected ${bitPackedModifiers} as modifiers`);
       }
       else
         console.log(`Host tried to set modifiers for ${lobbyId}, but lobby does not exist`);

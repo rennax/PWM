@@ -19,7 +19,6 @@ namespace PWM
             public List<Player> Players { get; set; }
             public Player Host { get; set; }
 
-            public List<string> Modifiers { get; set; }
             public Network.SetLevel Level { get; set; }
         }
 
@@ -50,8 +49,9 @@ namespace PWM
 
         public class NewModifiers
         {
-            public List<string> Modifiers { get; set; }
+            public ulong BitPackedModifiers { get; set; }
         }
+
         public class Player
         {
             public string Name { get; set; }
@@ -76,18 +76,6 @@ namespace PWM
         public class JoinedLobby
         {
             public Lobby Lobby { get; set; }
-        }
-
-        public class SelectLevel
-        {
-            public string GroupName { get; set; }
-            public int Index { get; set; }
-            public int Difficulty { get; set; }
-
-            public override string ToString()
-            {
-                return $"group {GroupName} with song index {Index}, difficulty int {Difficulty}";
-            }
         }
 
         public class Disconnected
@@ -118,8 +106,9 @@ namespace PWM
 
             public class SetLevel
             {
-                public string GroupName { get; set; }
-                public string SongName { get; set; }
+                public int PlayIntent { get; set; }
+                public ulong BitPackedModifiers { get; set; }
+                public string BaseName { get; set; }
                 public int Difficulty { get; set; }
             }
         }

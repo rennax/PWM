@@ -10,7 +10,6 @@ using Newtonsoft.Json;
 using MelonLoader;
 
 using SocketIOClient;
-
 using UnityEngine;
 using TMPro;
 
@@ -152,11 +151,11 @@ namespace PWM
                 UnityTaskScheduler.Factory.StartNew(GetLobbyList, msg);
             });
 
-
+            //Called when host selects level
             client.On("LevelSelected", data =>
             {
                 PWM.Messages.Network.SetLevel msg = data.GetValue<PWM.Messages.Network.SetLevel>();
-                MelonLogger.Msg($"Got Level Selected in group: {msg.GroupName}, for song: {msg.SongName} and with difficulty {msg.Difficulty}");
+                MelonLogger.Msg($"Got Level Selected song: {msg.BaseName} and with difficulty {msg.Difficulty}");
 
                 //Create task we can execute in context of unity main thread
                 Action<object> SetLevel = (object _setLevel) =>
@@ -169,6 +168,7 @@ namespace PWM
                 UnityTaskScheduler.Factory.StartNew(SetLevel, msg);
             });
 
+            //Called when host initiate starting of game
             client.On("StartGame", data => {
 
                 PWM.Messages.StartGame msg = data.GetValue<PWM.Messages.StartGame>();
@@ -181,6 +181,7 @@ namespace PWM
                 UnityTaskScheduler.Factory.StartNew(startGameAction, msg);
             });
 
+            //Called when a player changes his ready status
             client.On("PlayerReady", data =>
             {
                 Messages.Player msg = data.GetValue<Messages.Player>(0);
@@ -198,6 +199,7 @@ namespace PWM
                 UnityTaskScheduler.Factory.StartNew(playerReadyAction, msg);
             });
 
+            //Called whenever a player in lobby updates his score
             client.On("OnScoreSync", data => {
                 //PWM.Messages.Player player = data.GetValue<PWM.Messages.Player>(0);
                 //PWM.Messages.ScoreSync scoreSync = data.GetValue<PWM.Messages.ScoreSync>(1);
@@ -214,6 +216,7 @@ namespace PWM
                 UnityTaskScheduler.Factory.StartNew(updateScoreAction, score);
             });
 
+            //When this client created a lobby successfully
             client.On("CreatedLobby", data => {
                 PWM.Messages.Lobby msg = data.GetValue<PWM.Messages.Lobby>();
 
@@ -225,22 +228,24 @@ namespace PWM
                 UnityTaskScheduler.Factory.StartNew(CreatedLobby, msg);
             });
 
+            //Error on creating lobby
+            //TODO better error reporting
             client.On("CreateLobbyError", data => { 
                 PWM.Messages.Network.Error error = data.GetValue<PWM.Messages.Network.Error>();
                 MelonLogger.Msg($"Error Location:{error.Call}, Reason: {error.Reason}");
             });
 
+            //Setting modifiers
             client.On("SetModifiers", data =>
             {
                 MelonLogger.Msg("Setting new modifiers");
-                List<string> msg = data.GetValue<List<string>>(0);
+                ulong msg = data.GetValue<ulong>(0);
 
                 Action<object> SetModifiers = (object _modifiers) =>
                 {
-                    //MelonLogger.Msg("Disconnected from server");
                     Messages.NewModifiers newModifiers = new Messages.NewModifiers
                     {
-                        Modifiers = (List<string>)_modifiers
+                        BitPackedModifiers = (ulong)_modifiers
                     };
                     Messenger.Default.Send(newModifiers);
                 };

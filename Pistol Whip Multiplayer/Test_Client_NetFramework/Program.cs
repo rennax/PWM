@@ -80,7 +80,7 @@ namespace Test_client
             client.On("LevelSelected", data =>
             {
                 SetLevel sl = data.GetValue<SetLevel>();
-                Console.WriteLine($"New level selected, group: {sl.GroupName}, song: {sl.SongName}, with difficulty: {sl.Difficulty}");
+                Console.WriteLine($"New level selected song: {sl.BaseName}, with difficulty: {sl.Difficulty}");
             });
 
             client.On("GetLobbyList", data =>
@@ -192,19 +192,25 @@ namespace Test_client
                 Id = "TEST",
                 Players = new List<Player>(),
                 MaxPlayerCount = 4,
-                Modifiers = new List<string>() { "Pistol" }
+                Level = new SetLevel
+                {
+                    BaseName = "TheFall",
+                    PlayIntent = 0,
+                    Difficulty = 0,
+                    BitPackedModifiers = 1125899906842624
+                }
             };
             client.EmitAsync("CreateLobby", lobby, player);
         }
 
         static void JoinLobby()
         {
-            client.EmitAsync("JoinLobby", player, "test");
+            client.EmitAsync("JoinLobby", player, "TEST");
         }
 
         static void LeaveLobby()
         {
-            client.EmitAsync("LeaveLobby", player, "test");
+            client.EmitAsync("LeaveLobby", player, "TEST");
         }
 
         static void StartGame()
@@ -224,17 +230,19 @@ namespace Test_client
                 case ConsoleKey.D1:
                     setLevel = new SetLevel
                     {
-                        GroupName = "Classic",
-                        SongName = "TheFall_Data",
-                        Difficulty = 1
+                        BaseName = "TheFall_Data",
+                        Difficulty = 1,
+                        PlayIntent = 0,
+                        BitPackedModifiers = 1125899906842624
                     };
                     break;
                 case ConsoleKey.D2:
                     setLevel = new SetLevel
                     {
-                        GroupName = "Heartbreaker",
-                        SongName = "Embers_Data",
+                        BaseName = "Embers_Data",
                         Difficulty = 0,
+                        PlayIntent = 0, 
+                        BitPackedModifiers = 1125899906842624
                     };
                     break;
                 case ConsoleKey.D3:
@@ -242,9 +250,10 @@ namespace Test_client
                 default:
                     setLevel = new SetLevel
                     {
-                        GroupName = "Reloaded",
-                        SongName = "TheHighPriestess_Data",
-                        Difficulty = 2
+                        BaseName = "TheHighPriestess_Data",
+                        Difficulty = 2,
+                        PlayIntent = 0,
+                        BitPackedModifiers = 1125899906842624,
                     };
                     break;
             }
@@ -288,20 +297,20 @@ namespace Test_client
             switch (Console.ReadKey().Key)
             {
                 case ConsoleKey.D1:
-                    lobby.Modifiers = new List<string>() { "Pistol", "Dual Wield" };
+                    lobby.Level.BitPackedModifiers = 1125899906842632; //new List<string>() { "Pistol", "Dual Wield" };
                     break;
                 case ConsoleKey.D2:
-                    lobby.Modifiers = new List<string>() { "Revolver", "Deadeye" };
+                    lobby.Level.BitPackedModifiers = 2251799813685250; //new List<string>() { "Revolver", "Deadeye" };
                     break;
                 case ConsoleKey.D3:
-                    lobby.Modifiers = new List<string>() { "Burst", "Dual Wield", "Bullet Hell" };
+                    lobby.Level.BitPackedModifiers = 9007199254741000; //new List<string>() { "Boomstick", "Dual Wield" };
                     break;
                 default:
                     break;
             }
 
 
-            client.EmitAsync("SetModifiers", lobby.Id, lobby.Modifiers);
+            client.EmitAsync("SetModifiers", lobby.Id, lobby.Level.BitPackedModifiers);
             Console.WriteLine();
         }
         static void WriteHelp()

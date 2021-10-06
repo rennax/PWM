@@ -14,7 +14,15 @@ namespace PWM
 
 
         private TMP_Text pName;
-        public string Name { set => pName.text = value; }
+        public string Name { set 
+                {
+                _name = value;
+                name = value;
+                pName.SetText(value);
+                }
+            get => _name;
+        }
+        private string _name = "";
         private TMP_Text hitAcc;
         private TMP_Text beatAcc;
         private TMP_Text score;
@@ -30,6 +38,11 @@ namespace PWM
             IsReady(false);
 
             UpdateEntry(new Messages.ScoreSync { Score = 0, HitAccuracy = 0, BeatAccuracy = 0 }); 
+        }
+
+        void OnEnable()
+        {
+            pName.text = _name;
         }
 
         public void UpdateEntry(PWM.Messages.ScoreSync scoreSync)

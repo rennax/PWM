@@ -17,7 +17,7 @@ namespace PWM
         public LobbyOverview(IntPtr ptr) : base(ptr) { }
 
         public LobbyManager lobbyManager;
-        public PlayerEntry playerEntryPrefab;
+        //public PlayerEntry playerEntryPrefab;
 
         private static Messages.Lobby curLobby;
         private TMP_Text lobbyTitle;
@@ -28,19 +28,13 @@ namespace PWM
         private Image readyIconImg;
 
         private GameStartTimer gameStartTimer;
-        
-
+     
         //Player name is key
         private Dictionary<string, PlayerEntry> players = new Dictionary<string, PlayerEntry>();
         private Transform playersParent;
         
         static SongSelectionUIController songSelectionUIController = null;
-        private Messages.Network.SetLevel currentLevel = new Messages.Network.SetLevel
-        {
-            SongName = "TheFall_Data",
-            GroupName = "Classic",
-            Difficulty = 0
-        };
+        private Messages.Network.SetLevel CurrentLevel { get => CurrentLobby.Level; set => CurrentLobby.Level = value; }
 
         static bool catchStarting = true;
 
@@ -55,13 +49,9 @@ namespace PWM
 
         private Difficulty CurrentDifficulty
         {
-            get
-            {
-                if (songSelectionUIController == null)
-                    songSelectionUIController = GameObject.Find("Managers/UI State Controller/PF_CHUI_AnchorPt_SongSelection/PF_SongSelectionCanvas_UIv2").GetComponent<SongSelectionUIController>();
-                return songSelectionUIController.SelectedDifficulty();
-            }
+            get{ return GameManager.Instance.currentDifficulty; }
         }
+
         public Messages.Lobby CurrentLobby { get => curLobby; set => curLobby = value; }
 
         void Awake()
@@ -91,11 +81,12 @@ namespace PWM
             gameStartTimer = transform.FindChild("Timer").GetComponent<GameStartTimer>();
             gameStartTimer.gameObject.SetActive(false);
 
-            playerEntryPrefab = Entry.assets.playerEntry;
+            //playerEntryPrefab = Entry.assets.playerEntry;
             playersParent = transform.FindChild("Player_List").transform;
             lobbyTitle = transform.FindChild("Lobby_Title").GetComponent<TMP_Text>();
 
             actionManager = GameObject.Find("Managers/PlayerActionManager").GetComponent<PlayerActionManager>();
+
 
             //Setup message listeners
             Messenger.Default.Register(new Action<Messages.PlayerJoined>(OnPlayerJoinedLobby));
@@ -111,7 +102,7 @@ namespace PWM
             
 
 
-            global::Messenger.Default.Register<global::Messages.SelectFeatureSetSO>(new Action<global::Messages.SelectFeatureSetSO>(OnSceneSetSelect));
+            //global::Messenger.Default.Register<global::Messages.SelectFeatureSetSO>(new Action<global::Messages.SelectFeatureSetSO>(OnSceneSetSelect));
             global::Messenger.Default.Register<global::Messages.LevelSelectEvent>(new Action<global::Messages.LevelSelectEvent>(OnLevelSelect));
             global::Messenger.Default.Register<global::Messages.GameStartEvent>(new Action<global::Messages.GameStartEvent>(OnGameStart));
             global::Messenger.Default.Register<global::Messages.CompletedGameScoreEvent>(new Action<global::Messages.CompletedGameScoreEvent>(OnGameCompletedScoreEvent));
@@ -167,26 +158,20 @@ namespace PWM
                 MelonLogger.Msg($"{item.safeName} : {item.name} : {item.Name}");
             }
 #endif
-            List<string> mods = obj.modifiers.ToArray().Select(m => m.Name).ToList();
+
+            ulong bitPacked = GameplayDatabase.GetBitPackedModifiers(obj.modifiers);
+
             if (IsHost)
             {
-                Client.client.EmitAsync("SetModifiers", CurrentLobby.Id, mods);
+                Client.client.EmitAsync("SetModifiers", CurrentLobby.Id, bitPacked);
             }
             else
             {
-                //Since we are only setting modifiers one by one, we have to wait for all modifiers to be set
-                //befroe we attempt to correct otherwise we go into infinite loop
-                if (settingModifiers == true)
-                    return;
-                //We are not host
-                //To make sure that 
-                var firstNotSecond = mods.Except(CurrentLobby.Modifiers).ToList();
-                var secondNotFirst = CurrentLobby.Modifiers.Except(mods).ToList();
-                
-                bool isSame = !firstNotSecond.Any() && !secondNotFirst.Any();
-                if (!isSame)
+                if (bitPacked != CurrentLevel.BitPackedModifiers)
                 {
-                    lobbyManager.SetModifiers(CurrentLobby.Modifiers);
+                    settingModifiers = true;
+                    GameplayDatabase.Current.SetModifiers(bitPacked);
+                    settingModifiers = false;
                 }
             }
 
@@ -222,30 +207,6 @@ namespace PWM
             Client.client.EmitAsync("ScoreUpdate", CurrentLobby.Id, msg);
         }
 
-        private void OnSceneSetSelect(global::Messages.SelectFeatureSetSO msg)
-        {
-            if (!this.gameObject.activeSelf)
-                return;
-            //MelonLogger.Msg($"{msg.set.CanonicalUIName} : {msg.set.name}");
-
-            //If we are host transmit set the new current group
-            if (IsHost)
-            {
-                currentLevel.GroupName = msg.set.setLabelUIText;
-            }
-            else 
-            {
-                if (settingMap)
-                    return;
-
-                
-                //If non-host selects a map, we want to return him to the lobby map if the map is not the current lobby map
-                if (msg.set.setLabelUIText != currentLevel.GroupName)
-                {
-                    SetLevel(currentLevel);
-                }
-            }
-        }
 
         public void OnLevelSelect(global::Messages.LevelSelectEvent msg)
         {
@@ -256,17 +217,18 @@ namespace PWM
             if (IsHost)
             {
                 MelonLogger.Msg("Selected");
-                currentLevel.SongName = msg.level.data.name;
+                CurrentLevel.BaseName = msg.level.data.baseName; //Used by GameManager.SetDestination...
+                CurrentLevel.BitPackedModifiers = GameManager.Instance.GetBitPackedModifiers();
+                CurrentLevel.PlayIntent = (int)GameManager.Instance.playIntent;
+                CurrentLevel.Difficulty = (int)GameManager.GetDifficulty();
 
-                currentLevel.Difficulty = (int)CurrentDifficulty;
-
-                Client.client.EmitAsync("SetLevel", CurrentLobby.Id, currentLevel);
+                Client.client.EmitAsync("SetLevel", CurrentLobby.Id, CurrentLevel);
             }
             else
             {
-                if (!settingMap && msg.level.data.name != currentLevel.SongName)
+                if (!settingMap && msg.level.data.baseName != CurrentLevel.BaseName)
                 {
-                    SetLevel(currentLevel);
+                    SetLevel(CurrentLevel);
                 }
             }
         }
@@ -278,23 +240,24 @@ namespace PWM
 
             if (IsHost)
             {
-                currentLevel.Difficulty = (int)msg.Difficulty;
-                Client.client.EmitAsync("SetLevel", CurrentLobby.Id, currentLevel);
+                CurrentLevel.Difficulty = (int)msg.Difficulty;
+                Client.client.EmitAsync("SetLevel", CurrentLobby.Id, CurrentLevel);
             }
             else
             {
-                if (currentLevel.Difficulty != (int)msg.Difficulty)
+                if (CurrentLevel.Difficulty != (int)msg.Difficulty)
                 {
-                    SetDifficulty();
+                    SetLevel(CurrentLevel);
                 }
             }
         }
 
         public void OnLobbyModifiersSet(Messages.NewModifiers msg)
         {
-            CurrentLobby.Modifiers = msg.Modifiers;
+            MelonLogger.Msg("LobbyOverview: OnLobbyModifiersSet");
+            CurrentLobby.Level.BitPackedModifiers = msg.BitPackedModifiers;
             settingModifiers = true;
-            lobbyManager.SetModifiers(msg.Modifiers);
+            SetLevel(CurrentLevel);
             settingModifiers = false;
         }
 
@@ -307,9 +270,9 @@ namespace PWM
                 AddPlayer(player);
             }
 
-            settingModifiers = true;
-            lobbyManager.SetModifiers(curLobby.Modifiers);
-            settingModifiers = false;
+            //settingModifiers = true;
+            //lobbyManager.SetModifiers(curLobby.Modifiers);
+            //settingModifiers = false;
 
 
             if (curLobby.Level != null)
@@ -334,7 +297,7 @@ namespace PWM
             string playerName = player.Name;
             if (!players.ContainsKey(playerName))
             {
-                PlayerEntry playerEntry = Instantiate(playerEntryPrefab, playersParent);
+                PlayerEntry playerEntry = Instantiate(AssetBundleBank.Instance.PlayerEntryPrefab, playersParent);
                 playerEntry.Name = playerName;
                 playerEntry.IsReady(false);
                 players.Add(playerName, playerEntry);
@@ -487,63 +450,19 @@ namespace PWM
 
 
         #region SET_GAME
-        //Times might depend on the speed of the client. To test
+
         public void SetLevel(Messages.Network.SetLevel setLevel)
         {
-            currentLevel = setLevel;
+            MelonLogger.Msg($"{setLevel.BaseName}_{CurrentDifficulty}:{setLevel.BitPackedModifiers}");
+            CurrentLevel = setLevel;
+
             settingMap = true;
-            Invoke("SetFeatureMenu", 0.0f);
-            Invoke("SetFeatureGroup", 0.4f);
-            Invoke("SetSong", 0.7f);
-            Invoke("SetDifficulty", 0.9f);
-            Invoke("DoneSettingMap", 1f);
-        }
-
-
-        //There ought to be a smarter way to do this
-        private void DoneSettingMap()
-        {
+            settingModifiers = true;
+            GameManager.Instance.playIntent = (PlayIntent)setLevel.PlayIntent;
+            GameManager.Instance.SetDestinationAndUpdateUIFromDestinationString($"{setLevel.BaseName}_{CurrentDifficulty}:{setLevel.BitPackedModifiers}", true, true);
+            GameObject.Find("Managers/UI State Controller/PF_CHUI_AnchorPt_SongSelection/PF_SongSelectionCanvas_UIv2/ForwardInfoBoard/DiffPlay/DiffButtons").GetComponent<DifficultySelector>().InitDifficultyButtons();
             settingMap = false;
-        }
-
-        private void SetFeatureMenu()
-        {
-            GameObject.Find("Managers/UI State Controller/PF_CHUI_AnchorPt_SongSelection/PF_SongSelectionCanvas_UIv2/SceneInventory/SceneSet-rev4/PW_VerticalLayoutElementPanel/FeatureMenuContainer/ARCADE").GetComponent<FeatureSelectMenuButton>().SelectFeatureType();
-        }
-
-        private void SetFeatureGroup()
-        {
-            MelonLogger.Msg($"Trying to set group: Managers/UI State Controller/PF_CHUI_AnchorPt_SongSelection/PF_SongSelectionCanvas_UIv2/SceneInventory/SceneSet-rev4/PW_VerticalLayoutElementPanel/LowerContent/GroupMenuContainer/{currentLevel.GroupName}");
-            GroupSelectMenuButton groupSelect = GameObject.Find($"Managers/UI State Controller/PF_CHUI_AnchorPt_SongSelection/PF_SongSelectionCanvas_UIv2/SceneInventory/SceneSet-rev4/PW_VerticalLayoutElementPanel/LowerContent/GroupMenuContainer/{currentLevel.GroupName}").GetComponent<GroupSelectMenuButton>();
-            groupSelect.SelectFeatureGroup();
-        }
-
-        //Set song
-        private void SetSong()
-        {
-            MelonLogger.Msg($"Trying to set song: Managers/UI State Controller/PF_CHUI_AnchorPt_SongSelection/PF_SongSelectionCanvas_UIv2/SceneInventory/SceneSet-rev4/PW_VerticalLayoutElementPanel/LowerContent/Content/FreePlayContent(Clone)/Content/{currentLevel.SongName}");
-            GameObject songObj = GameObject.Find($"Managers/UI State Controller/PF_CHUI_AnchorPt_SongSelection/PF_SongSelectionCanvas_UIv2/SceneInventory/SceneSet-rev4/PW_VerticalLayoutElementPanel/LowerContent/Content/FreePlayContent(Clone)/Content/{currentLevel.SongName}");
-            if (songObj != null)
-            {
-                SongPanelUIController song = songObj.GetComponent<SongPanelUIController>();
-                song.PosterButtonHandler();
-                
-            }
-            else
-                MelonLogger.Msg("Failed to get song");
-        }
-
-        public void SetDifficulty()
-        {
-            MelonLogger.Msg($"Trying to set difficulty: Managers/UI State Controller/PF_CHUI_AnchorPt_SongSelection/PF_SongSelectionCanvas_UIv2/ForwardInfoBoard/DiffPlay/DiffButtons/CncrgDifficultyButton-{(Difficulty)currentLevel.Difficulty}/PF_CHUI_Trigger_UnityEvents");
-            GameObject diffObj = GameObject.Find($"Managers/UI State Controller/PF_CHUI_AnchorPt_SongSelection/PF_SongSelectionCanvas_UIv2/ForwardInfoBoard/DiffPlay/DiffButtons/CncrgDifficultyButton-{(Difficulty)currentLevel.Difficulty}/PF_CHUI_Trigger_UnityEvents");
-            if (diffObj != null)
-            {
-                CHUI_TriggerEvents diffTriggerEvent = diffObj.GetComponent<CHUI_TriggerEvents>();
-                diffTriggerEvent.OnClick();
-            }
-            else
-                MelonLogger.Msg("Failed to set difficulty");
+            settingModifiers = false;
         }
 
         //Catch selection of difficulty
@@ -552,8 +471,8 @@ namespace PWM
         {
             public static void Postfix(CncrgDifficultyButtonController __instance)
             {
-                MelonLogger.Msg($"New difficulty selected: {__instance.Difficulty}");
-                Messenger.Default.Send<Messages.DifficultySelected>(new Messages.DifficultySelected { Difficulty = __instance.Difficulty });
+                //MelonLogger.Msg($"New difficulty selected: {__instance.Difficulty}");
+                Messenger.Default.Send(new Messages.DifficultySelected { Difficulty = __instance.Difficulty });
             }
         }
 

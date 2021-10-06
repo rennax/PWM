@@ -154,6 +154,7 @@
   <ItemGroup>
     <Compile Include="Client.cs" />
     <Compile Include="Config.cs" />
+    <Compile Include="Custom Types\AssetBundleBank.cs" />
     <Compile Include="Custom Types\CreateLobby.cs" />
     <Compile Include="Custom Types\GameStartTimer.cs" />
     <Compile Include="Custom Types\Keyboard\VRKey.cs" />

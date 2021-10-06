@@ -16,7 +16,6 @@ namespace PWM
         public LobbyManager lobbyManager;
 
         private List<PWM.Messages.Lobby> lobbies = new List<PWM.Messages.Lobby>();
-        public LobbyPreviewEntry lobbyUIPrefab;
         public RectTransform lobbyPreviewParent;
         private List<GameObject> lobbyPreviewEntries = new List<GameObject>();
 
@@ -25,12 +24,7 @@ namespace PWM
         void Start()
         {
             //Register messages
-            PWM.Messenger.Default.Register<PWM.Messages.LobbyList>(OnLobbyList);
-            
-            lobbyUIPrefab = Entry.assets.lobbyPreviewEntry;
-            lobbyUIPrefab.lobbyList = this;
-           
-
+            Messenger.Default.Register<Messages.LobbyList>(OnLobbyList);
 
             lobbyPreviewParent = this.transform.FindChild("VerticalLayoutPanel").GetComponent<RectTransform>();
 
@@ -79,7 +73,8 @@ namespace PWM
             lobbies = msg.Lobbies;
             foreach (var lobby in lobbies)
             {
-                LobbyPreviewEntry entry = Instantiate(lobbyUIPrefab, lobbyPreviewParent);
+                LobbyPreviewEntry entry = Instantiate(AssetBundleBank.Instance.LobbyPreviewEntryPrefab, lobbyPreviewParent);
+                entry.lobbyList = this;
                 entry.id.text = ($"{lobby.Id}");
                 entry.playerText.text = $"{lobby.Players.Count}/{lobby.MaxPlayerCount}";
                 entry.lobbyList = this;
