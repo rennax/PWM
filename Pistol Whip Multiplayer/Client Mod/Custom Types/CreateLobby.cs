@@ -85,14 +85,14 @@ namespace PWM
                 lobbyName = lobbyName.Substring(0, maxNameLenght);
 
             var dest = GameManager.theDestination;
-
-            var lobby = new PWM.Messages.Lobby {
+            string baseName = (dest.level != null ? dest.level.baseName : "Lobby");
+            var lobby = new Messages.Lobby {
                 Id = lobbyName,
                 MaxPlayerCount = playerCount.Count,
                 Players = new List<Messages.Player>(),
                 Level = new Messages.Network.SetLevel
                 {
-                    BaseName = dest.level.baseName,
+                    BaseName = baseName,
                     Difficulty = (int)GameManager.GetDifficulty(),
                     BitPackedModifiers = GameManager.Instance.GetBitPackedModifiers(),
                     PlayIntent = (int)PlayIntent.FREEPLAY
