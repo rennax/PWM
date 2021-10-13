@@ -85,7 +85,6 @@ namespace PWM
             GameObject bankGO = new GameObject();
             bankGO.name = "AssetBundleBank";
             AssetBundleBank bank = bankGO.AddComponent<AssetBundleBank>();
-
             lobbyPanel = UnityEngine.Object.Instantiate(bank.LobbyPanelPrefab);
             keyboard = UnityEngine.Object.Instantiate(bank.KeyboardPrefab);
             keyboardManager = keyboard.GetComponent<Keyboard.VRKeyboardManager>();

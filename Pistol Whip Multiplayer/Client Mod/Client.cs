@@ -154,14 +154,15 @@ namespace PWM
             //Called when host selects level
             client.On("LevelSelected", data =>
             {
-                PWM.Messages.Network.SetLevel msg = data.GetValue<PWM.Messages.Network.SetLevel>();
+                Messages.Network.SetLevel msg = data.GetValue<Messages.Network.SetLevel>();
                 MelonLogger.Msg($"Got Level Selected song: {msg.BaseName} and with difficulty {msg.Difficulty}");
 
                 //Create task we can execute in context of unity main thread
                 Action<object> SetLevel = (object _setLevel) =>
                 {
-                    Messages.Network.SetLevel setLevel = (PWM.Messages.Network.SetLevel)_setLevel;
-                    Messenger.Default.Send(setLevel);
+                    MelonLogger.Msg("Just something");
+                    Messages.Network.SetLevel setLevel = (Messages.Network.SetLevel)_setLevel;
+                    PWM.Messenger.Default.Send(setLevel);
 
                 };
 
@@ -175,7 +176,7 @@ namespace PWM
                 Action<object> startGameAction = (object startGame) =>
                 {
                     PWM.Messages.StartGame sg = (Messages.StartGame)startGame;
-                    Messenger.Default.Send(sg);
+                    PWM.Messenger.Default.Send(sg);
                 };
 
                 UnityTaskScheduler.Factory.StartNew(startGameAction, msg);
@@ -247,7 +248,7 @@ namespace PWM
                     {
                         BitPackedModifiers = (ulong)_modifiers
                     };
-                    Messenger.Default.Send(newModifiers);
+                    PWM.Messenger.Default.Send(newModifiers);
                 };
 
                 UnityTaskScheduler.Factory.StartNew(SetModifiers, msg);

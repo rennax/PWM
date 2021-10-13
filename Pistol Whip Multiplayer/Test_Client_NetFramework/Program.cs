@@ -194,7 +194,7 @@ namespace Test_client
                 MaxPlayerCount = 4,
                 Level = new SetLevel
                 {
-                    BaseName = "TheFall",
+                    BaseName = "Lobby",
                     PlayIntent = 0,
                     Difficulty = 0,
                     BitPackedModifiers = 1125899906842624
@@ -230,7 +230,7 @@ namespace Test_client
                 case ConsoleKey.D1:
                     setLevel = new SetLevel
                     {
-                        BaseName = "TheFall_Data",
+                        BaseName = "TheFall",
                         Difficulty = 1,
                         PlayIntent = 0,
                         BitPackedModifiers = 1125899906842624
@@ -239,7 +239,7 @@ namespace Test_client
                 case ConsoleKey.D2:
                     setLevel = new SetLevel
                     {
-                        BaseName = "Embers_Data",
+                        BaseName = "Embers",
                         Difficulty = 0,
                         PlayIntent = 0, 
                         BitPackedModifiers = 1125899906842624
@@ -250,7 +250,7 @@ namespace Test_client
                 default:
                     setLevel = new SetLevel
                     {
-                        BaseName = "TheHighPriestess_Data",
+                        BaseName = "TheHighPriestess",
                         Difficulty = 2,
                         PlayIntent = 0,
                         BitPackedModifiers = 1125899906842624,

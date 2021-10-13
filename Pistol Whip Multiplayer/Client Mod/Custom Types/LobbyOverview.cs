@@ -28,12 +28,13 @@ namespace PWM
         private Image readyIconImg;
 
         private GameStartTimer gameStartTimer;
+
+        private bool canStartYet = false;
      
         //Player name is key
         private Dictionary<string, PlayerEntry> players = new Dictionary<string, PlayerEntry>();
         private Transform playersParent;
         
-        static SongSelectionUIController songSelectionUIController = null;
         private Messages.Network.SetLevel CurrentLevel { get => CurrentLobby.Level; set => CurrentLobby.Level = value; }
 
         static bool catchStarting = true;
@@ -49,7 +50,7 @@ namespace PWM
 
         private Difficulty CurrentDifficulty
         {
-            get{ return GameManager.Instance.currentDifficulty; }
+            get{ return (Difficulty) CurrentLevel.Difficulty; }
         }
 
         public Messages.Lobby CurrentLobby { get => curLobby; set => curLobby = value; }
@@ -145,38 +146,6 @@ namespace PWM
             }
         }
 
-        private void OnModifiersSet(global::Messages.ModifiersSet obj)
-        {
-            //CurrentLobby == null is to catch the message sent at boot of game
-            if (!this.gameObject.activeSelf || CurrentLobby == null)
-                return;
-
-#if DEBUG
-            MelonLogger.Msg("Following modifiers are enabled:");
-            foreach (var item in obj.modifiers)
-            {
-                MelonLogger.Msg($"{item.safeName} : {item.name} : {item.Name}");
-            }
-#endif
-
-            ulong bitPacked = GameplayDatabase.GetBitPackedModifiers(obj.modifiers);
-
-            if (IsHost)
-            {
-                Client.client.EmitAsync("SetModifiers", CurrentLobby.Id, bitPacked);
-            }
-            else
-            {
-                if (bitPacked != CurrentLevel.BitPackedModifiers)
-                {
-                    settingModifiers = true;
-                    GameplayDatabase.Current.SetModifiers(bitPacked);
-                    settingModifiers = false;
-                }
-            }
-
-        }
-
         void OnGameStart(global::Messages.GameStartEvent msg)
         {
             if(curLobby != null)
@@ -206,7 +175,6 @@ namespace PWM
 
             Client.client.EmitAsync("ScoreUpdate", CurrentLobby.Id, msg);
         }
-
 
         public void OnLevelSelect(global::Messages.LevelSelectEvent msg)
         {
@@ -250,6 +218,36 @@ namespace PWM
                     SetLevel(CurrentLevel);
                 }
             }
+        }
+
+        private void OnModifiersSet(global::Messages.ModifiersSet obj)
+        {
+            //CurrentLobby == null is to catch the message sent at boot of game
+            if (!this.gameObject.activeSelf || CurrentLobby == null)
+                return;
+
+#if DEBUG
+            MelonLogger.Msg("Following modifiers are enabled:");
+            foreach (var item in obj.modifiers)
+            {
+                MelonLogger.Msg($"{item.Name}");
+            }
+#endif
+
+            ulong bitPacked = GameplayDatabase.GetBitPackedModifiers(obj.modifiers);
+
+            if (IsHost)
+            {
+                Client.client.EmitAsync("SetModifiers", CurrentLobby.Id, bitPacked);
+            }
+            else
+            {
+                if (settingModifiers == false && bitPacked != CurrentLevel.BitPackedModifiers)
+                {
+                    SetLevel(CurrentLevel);
+                }
+            }
+
         }
 
         public void OnLobbyModifiersSet(Messages.NewModifiers msg)
@@ -453,14 +451,30 @@ namespace PWM
 
         public void SetLevel(Messages.Network.SetLevel setLevel)
         {
-            MelonLogger.Msg($"{setLevel.BaseName}_{CurrentDifficulty}:{setLevel.BitPackedModifiers}");
             CurrentLevel = setLevel;
+            MelonLogger.Msg($"{setLevel.BaseName}_{(Difficulty)setLevel.Difficulty}:{setLevel.BitPackedModifiers}");
 
             settingMap = true;
             settingModifiers = true;
-            GameManager.Instance.playIntent = (PlayIntent)setLevel.PlayIntent;
-            GameManager.Instance.SetDestinationAndUpdateUIFromDestinationString($"{setLevel.BaseName}_{CurrentDifficulty}:{setLevel.BitPackedModifiers}", true, true);
-            GameObject.Find("Managers/UI State Controller/PF_CHUI_AnchorPt_SongSelection/PF_SongSelectionCanvas_UIv2/ForwardInfoBoard/DiffPlay/DiffButtons").GetComponent<DifficultySelector>().InitDifficultyButtons();
+
+            if (b)
+
+            GameManager.Instance.playIntent = (PlayIntent)CurrentLevel.PlayIntent; //We have to make sure playintent is not NONE when calling ShowDiffPlay
+            UIStateController.Instance.destHasBeenSetFromPoster = true;
+
+            //Replication of pressing on song panel
+            GameplayDatabase.CachedCurrent.SetModifiers(setLevel.BitPackedModifiers);
+            GameManager.Instance.SetDestinationAndUpdateUIFromDestinationString($"{setLevel.BaseName}_{(Difficulty)setLevel.Difficulty}:{setLevel.BitPackedModifiers}", true, true);
+            DiffPlayHintsController.Instance.ShowDiffPlay();
+
+            global::Messenger.Default.Send(global::Messages.DifficultyOptionsAreLocked.Create(StaticUITerms.DiffUnlocked));
+            global::Messenger.Default.Send(global::Messages.StylesAreLocked.Create(StaticUITerms.StylesUnlocked));
+            global::Messenger.Default.Send(global::Messages.StyleResetAndRandomAreLocked.Create(StaticUITerms.StylesResetAndRandomUnlocked));
+            global::Messenger.Default.Send(global::Messages.ToggleSceneDetailPanel.Create(true));
+            
+            global::Messenger.Default.Send(global::Messages.PlayButtonIsEnabledForIntent.Create(true, (PlayIntent)CurrentLevel.PlayIntent));
+
+            //GameObject.Find("Managers/UI State Controller/PF_CHUI_AnchorPt_SongSelection/PF_SongSelectionCanvas_UIv2/ForwardInfoBoard/DiffPlay/DiffButtons").GetComponent<DifficultySelector>().InitDifficultyButtons();
             settingMap = false;
             settingModifiers = false;
         }
@@ -473,6 +487,16 @@ namespace PWM
             {
                 //MelonLogger.Msg($"New difficulty selected: {__instance.Difficulty}");
                 Messenger.Default.Send(new Messages.DifficultySelected { Difficulty = __instance.Difficulty });
+            }
+        }
+
+        [HarmonyPatch(typeof(DiffPlayHintsController), "SettingIsAvailableMessage")]
+        private static class SettingIsAvailableMessageHook
+        {
+            public static void Postfix(DiffPlayHintsController __instance, global::Messages.DifficultyOptionsAreLocked e)
+            {
+                string s = global::Messages.DifficultyOptionsAreLocked.s_instance.value;
+                MelonLogger.Msg($"Got call to SettingIsAvailableMessage with '{e.value}', '{s}' as value");
             }
         }
 
