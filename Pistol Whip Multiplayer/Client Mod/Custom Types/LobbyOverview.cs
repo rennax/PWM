@@ -43,8 +43,6 @@ namespace PWM
         float tickRate = 1f;
         PlayerActionManager actionManager;
 
-
-
         public bool IsHost { get => (curLobby != null && lobbyManager.Player.Name == curLobby.Host.Name); }
 
         private Difficulty CurrentDifficulty
@@ -100,15 +98,13 @@ namespace PWM
             Messenger.Default.Register(new Action<Messages.CreatedLobby>(OnCreatedLobby));
             Messenger.Default.Register(new Action<Messages.ClosedLobby>(OnLobbyClosed));
             Messenger.Default.Register(new Action<Messages.Network.SetLevel>(SetLevel));
-            Messenger.Default.Register(new Action<Messages.DifficultySelected>(OnDifficultySelect));
             Messenger.Default.Register(new Action<Messages.UpdateScore>(OnScoreSync));
             Messenger.Default.Register(new Action<Messages.StartGame>(OnStartGame));
             Messenger.Default.Register(new Action<Messages.NewModifiers>(OnLobbyModifiersSet));
             Messenger.Default.Register(new Action<Messages.PlayerReady>(OnPlayerReady));
             
 
-
-            //global::Messenger.Default.Register<global::Messages.SelectFeatureSetSO>(new Action<global::Messages.SelectFeatureSetSO>(OnSceneSetSelect));
+            //Listen to game Messages
             global::Messenger.Default.Register<global::Messages.LevelSelectEvent>(new Action<global::Messages.LevelSelectEvent>(OnLevelSelect));
             global::Messenger.Default.Register<global::Messages.GameStartEvent>(new Action<global::Messages.GameStartEvent>(OnGameStart));
             global::Messenger.Default.Register<global::Messages.CompletedGameScoreEvent>(new Action<global::Messages.CompletedGameScoreEvent>(OnGameCompletedScoreEvent));
@@ -155,24 +151,7 @@ namespace PWM
                 player.IsReady(obj.Player.Ready);
             }
         }
-        public void OnDifficultySelect(Messages.DifficultySelected msg)
-        {
-            if (!this.gameObject.activeSelf)
-                return;
 
-            if (IsHost)
-            {
-                CurrentLevel.Difficulty = (int)msg.Difficulty;
-                Client.client.EmitAsync("SetLevel", CurrentLobby.Id, CurrentLevel);
-            }
-            else
-            {
-                if (CurrentLevel.Difficulty != (int)msg.Difficulty)
-                {
-                    SetLevel(CurrentLevel);
-                }
-            }
-        }
         public void OnLobbyModifiersSet(Messages.NewModifiers msg)
         {
             MelonLogger.Msg("LobbyOverview: OnLobbyModifiersSet");
@@ -317,14 +296,13 @@ namespace PWM
             if (!this.gameObject.activeSelf)
                 return;
 
-            MelonLogger.Msg($"{obj.level.name} : {obj.level.data.songName} : {obj.level.data.name}");
             if (IsHost)
             {
-                MelonLogger.Msg("Selected");
+                MelonLogger.Msg($"Host selected: {obj.level.name}_{obj.level.difficulty}:{GameplayDatabase.CachedCurrent.GetBitpackedActiveModifiers()}");
                 CurrentLevel.BaseName = obj.level.data.baseName; //Used by GameManager.SetDestination...
-                CurrentLevel.BitPackedModifiers = GameManager.Instance.GetBitPackedModifiers();
+                CurrentLevel.BitPackedModifiers = GameplayDatabase.CachedCurrent.GetBitpackedActiveModifiers(); // GameManager.Instance.GetBitPackedModifiers();
                 CurrentLevel.PlayIntent = (int)GameManager.Instance.playIntent;
-                CurrentLevel.Difficulty = (int)GameManager.GetDifficulty();
+                CurrentLevel.Difficulty = (int)obj.level.difficulty;
 
                 Client.client.EmitAsync("SetLevel", CurrentLobby.Id, CurrentLevel);
                 Invoke("PreventInteraction", 0.05f);
@@ -344,11 +322,12 @@ namespace PWM
                 return;
 
 #if DEBUG
-            MelonLogger.Msg("Following modifiers are enabled:");
+            string mods = "Following modifiers are enabled:";
             foreach (var item in obj.modifiers)
             {
-                MelonLogger.Msg($"{item.Name}");
+                mods += $" {item.Name}";
             }
+            MelonLogger.Msg(mods);
 #endif
 
             ulong bitPacked = GameplayDatabase.GetBitPackedModifiers(obj.modifiers);
@@ -364,10 +343,13 @@ namespace PWM
                     SetLevel(CurrentLevel);
                 }
             }
-
         }
+
         private void OnPlayerHitDie(global::Messages.PlayerHitDie obj)
         {
+            if (!this.gameObject.activeSelf)
+                return;
+
             //Remove retry if player dies. Allow them only to go back to lobby
             if (CurrentLobby != null)
             {
@@ -379,26 +361,39 @@ namespace PWM
         }
         private void OnGameEnd()
         {
+            if (!this.gameObject.activeSelf)
+                return;
+
             //TODO: Find better solution that this. This is pretty yikes
             Invoke("PreventInteraction", 0.05f);
         }
         #endregion
 
+        
+
         private void PreventInteraction()
         {
-            if (!IsHost)
+            if (CurrentLobby != null)
             {
-                settingDiff = true;
-                global::Messenger.Default.Send(global::Messages.DifficultyOptionsAreLocked.Create(StaticUITerms.DiffUnlocked)); //Trigger reset on diff btns to show current diff
-                settingDiff = false;
-                global::Messenger.Default.Send(global::Messages.StylesAreLocked.Create(StaticUITerms.StylesLockedForCampaigns));
-                global::Messenger.Default.Send(global::Messages.StyleResetAndRandomAreLocked.Create(StaticUITerms.StylesResetAndRandomAreLocked));
+                if (!IsHost)
+                {
+                    settingDiff = true;
+                    global::Messenger.Default.Send(global::Messages.DifficultyOptionsAreLocked.Create(StaticUITerms.DiffUnlocked)); //Trigger reset on diff btns to show current diff
+                    settingDiff = false;
+                    global::Messenger.Default.Send(global::Messages.StylesAreLocked.Create(StaticUITerms.StylesLockedForCampaigns));
+                    global::Messenger.Default.Send(global::Messages.StyleResetAndRandomAreLocked.Create(StaticUITerms.StylesResetAndRandomAreLocked));
+                    global::Messenger.Default.Send(global::Messages.PlayButtonIsEnabledForIntent.Create(false, PlayIntent.FREEPLAY)); //We do not want the host to start from game menu
+                }
+                else
+                {
+                    //We do not want the host to start from game menu, but we still want him to be able to go back from result screen
+                    bool allowPlayButton = UIStateController.Instance.endResultsObj.activeSelf;
+                    global::Messenger.Default.Send(global::Messages.PlayButtonIsEnabledForIntent.Create(allowPlayButton, PlayIntent.FREEPLAY));
+                }
             }
-            global::Messenger.Default.Send(global::Messages.PlayButtonIsEnabledForIntent.Create(false, PlayIntent.FREEPLAY)); //We do not want the host to start from game menu
         }
 
         //Start game if corresponding network event is triggered
-
         private void DelayedGameStart()
         {
             starting = true;
@@ -496,13 +491,15 @@ namespace PWM
         public void SetLevel(Messages.Network.SetLevel setLevel)
         {
             CurrentLevel = setLevel;
-            MelonLogger.Msg($"{setLevel.BaseName}_{(Difficulty)setLevel.Difficulty}:{setLevel.BitPackedModifiers}");
+            MelonLogger.Msg($"Setting level: {setLevel.BaseName}_{(Difficulty)setLevel.Difficulty}:{setLevel.BitPackedModifiers}");
             if (setLevel.BaseName == "Lobby")
                 return;
 
             settingMap = true;
             settingModifiers = true;
             settingDiff = true;
+
+
 
 
             GameManager.Instance.playIntent = (PlayIntent)CurrentLevel.PlayIntent; //We have to make sure playintent is not NONE when calling ShowDiffPlay
@@ -512,6 +509,7 @@ namespace PWM
             GameplayDatabase.CachedCurrent.SetModifiers(setLevel.BitPackedModifiers);
             string diffString = (CurrentDifficulty != Difficulty.Normal ? $"_{CurrentDifficulty}" : ""); //Normal is not part of destination so we have to remove that
             string dstString = $"{setLevel.BaseName}{diffString}:{setLevel.BitPackedModifiers}";
+            GameManager.Instance.currentDifficulty = (Difficulty)CurrentLevel.Difficulty;
             GameManager.Instance.SetDestinationAndUpdateUIFromDestinationString(dstString, true, true);
             DiffPlayHintsController.Instance.ShowDiffPlay();
 
@@ -546,7 +544,7 @@ namespace PWM
                 if (preventUIInteraction)
                     return false;
 
-                Messenger.Default.Send(new Messages.DifficultySelected { Difficulty = __instance.Difficulty });
+                //Messenger.Default.Send(new Messages.DifficultySelected { Difficulty = __instance.Difficulty });
                 return true;
             }
         }
