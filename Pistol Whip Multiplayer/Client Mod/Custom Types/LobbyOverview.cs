@@ -499,7 +499,9 @@ namespace PWM
             settingModifiers = true;
             settingDiff = true;
 
-
+            //Are we in end result screen, we must go back to main menu before proceeding
+            if (UIStateController.Instance.endResultsObj.activeSelf)
+                UIStateController.Instance.OnReturnToMainMenu();
 
 
             GameManager.Instance.playIntent = (PlayIntent)CurrentLevel.PlayIntent; //We have to make sure playintent is not NONE when calling ShowDiffPlay
@@ -591,6 +593,18 @@ namespace PWM
             public static bool Prefix(PlayButtonManager __instance)
             {
                 if (preventUIInteraction && !starting)
+                    return false;
+                return true;
+            }
+        }
+
+        //Prevent host from pressing replay in end results menu.
+        [HarmonyPatch(typeof(UIStateController), "OnSelectReplaySongUIButton")]
+        private static class OnSelectReplaySongUIButton_Hook
+        {
+            public static bool Prefix(UIStateController __instance)
+            {
+                if (curLobby != null)
                     return false;
                 return true;
             }
