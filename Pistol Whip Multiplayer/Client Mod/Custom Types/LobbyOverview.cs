@@ -29,6 +29,8 @@ namespace PWM
 
         private GameStartTimer gameStartTimer;
 
+        GameObject retryDeathBtn = null;
+
         private bool canStartYet = false;
      
         //Player name is key
@@ -36,8 +38,6 @@ namespace PWM
         private Transform playersParent;
         
         private Messages.Network.SetLevel CurrentLevel { get => CurrentLobby.Level; set => CurrentLobby.Level = value; }
-
-        static bool catchStarting = true;
 
         float time = 0;
         float tickRate = 1f;
@@ -52,6 +52,9 @@ namespace PWM
         {
             get{ return (Difficulty) CurrentLevel.Difficulty; }
         }
+
+        private static bool preventUIInteraction = false;
+        private static bool starting = false;
 
         public Messages.Lobby CurrentLobby { get => curLobby; set => curLobby = value; }
 
@@ -108,6 +111,8 @@ namespace PWM
             global::Messenger.Default.Register<global::Messages.GameStartEvent>(new Action<global::Messages.GameStartEvent>(OnGameStart));
             global::Messenger.Default.Register<global::Messages.CompletedGameScoreEvent>(new Action<global::Messages.CompletedGameScoreEvent>(OnGameCompletedScoreEvent));
             global::Messenger.Default.Register<global::Messages.ModifiersSet>(new Action<global::Messages.ModifiersSet>(OnModifiersSet));
+            global::Messenger.Default.Register<global::Messages.PlayerHitDie>(new Action<global::Messages.PlayerHitDie>(OnPlayerHitDie));
+
         }
 
 
@@ -136,6 +141,8 @@ namespace PWM
                 }
             }
         }
+
+        #region ModMessages
         private void OnPlayerReady(Messages.PlayerReady obj)
         {
             PlayerEntry player;
@@ -145,8 +152,135 @@ namespace PWM
                 player.IsReady(obj.Player.Ready);
             }
         }
+        public void OnDifficultySelect(Messages.DifficultySelected msg)
+        {
+            if (!this.gameObject.activeSelf)
+                return;
 
-        void OnGameStart(global::Messages.GameStartEvent msg)
+            if (IsHost)
+            {
+                CurrentLevel.Difficulty = (int)msg.Difficulty;
+                Client.client.EmitAsync("SetLevel", CurrentLobby.Id, CurrentLevel);
+            }
+            else
+            {
+                if (CurrentLevel.Difficulty != (int)msg.Difficulty)
+                {
+                    SetLevel(CurrentLevel);
+                }
+            }
+        }
+        public void OnLobbyModifiersSet(Messages.NewModifiers msg)
+        {
+            MelonLogger.Msg("LobbyOverview: OnLobbyModifiersSet");
+            CurrentLobby.Level.BitPackedModifiers = msg.BitPackedModifiers;
+            settingModifiers = true;
+            SetLevel(CurrentLevel);
+            settingModifiers = false;
+        }
+        public void JoinedLobby(Messages.Lobby lobby)
+        {
+            curLobby = lobby;
+            lobbyTitle.text = lobby.Id;
+            foreach (var player in lobby.Players)
+            {
+                AddPlayer(player);
+            }
+
+            //settingModifiers = true;
+            //lobbyManager.SetModifiers(curLobby.Modifiers);
+            //settingModifiers = false;
+
+
+            if (curLobby.Level != null)
+            {
+                SetLevel(curLobby.Level);
+            }
+
+            readyButton.gameObject.SetActive(true);
+
+            preventUIInteraction = true;
+
+            MelonLogger.Msg("JoinedLobby called");
+        }
+        private void OnLobbyClosed(Messages.ClosedLobby msg)
+        {
+            LeaveLobby();
+
+            lobbyManager.ShowLobbyListCanvas();
+        }
+        void AddPlayer(Messages.Player player)
+        {
+            string playerName = player.Name;
+            if (!players.ContainsKey(playerName))
+            {
+                PlayerEntry playerEntry = Instantiate(AssetBundleBank.Instance.PlayerEntryPrefab, playersParent);
+                playerEntry.Name = playerName;
+                playerEntry.IsReady(false);
+                players.Add(playerName, playerEntry);
+                playerEntry.IsReady(player.Ready);
+            }
+            else
+            {
+                MelonLogger.Msg($"Player: {playerName}, is already in the lobby");
+            }
+        }
+        void OnCreatedLobby(PWM.Messages.CreatedLobby msg)
+        {
+            curLobby = msg.Lobby;
+            lobbyTitle.text = curLobby.Id;
+            preventUIInteraction = false;
+
+            foreach (var player in curLobby.Players)
+            {
+                AddPlayer(player);
+            }
+            readyButton.gameObject.SetActive(true);
+            MelonLogger.Msg("ONCreatedLobby called");
+        }
+        void OnPlayerJoinedLobby(PWM.Messages.PlayerJoined msg)
+        {
+            AddPlayer(msg.Player);
+        }
+        void OnPlayerLeftLobby(PWM.Messages.PlayerLeft msg)
+        {
+            string playerName = msg.Player.Name;
+
+            PlayerEntry pe;
+            if (players.TryGetValue(playerName, out pe))
+            {
+                players.Remove(playerName);
+                Destroy(pe.gameObject);
+                MelonLogger.Msg($"Player: {playerName} left the lobby");
+            }
+            else
+            {
+                MelonLogger.Msg($"Player: {playerName}, is not in the lobby");
+            }
+        }
+        void OnScoreSync(Messages.UpdateScore msg)
+        {
+            PlayerEntry player;
+            if (players.TryGetValue(msg.Player.Name, out player))
+            {
+                player.UpdateEntry(msg.Score); 
+            }
+        }
+        private void OnStartGame(Messages.StartGame obj)
+        {
+            MelonLogger.Msg("Start Game");
+
+            gameStartTimer.gameObject.SetActive(true);
+            float delay = obj.DelayMS / 1000;
+            gameStartTimer.SetTimer(delay);
+            CancelInvoke("DelayedGameStart"); //Handle cases where we go from not all ready(30s), to all ready(5s)
+            Invoke("DelayedGameStart", delay);
+            
+        }
+        #endregion
+
+        #region GameMessages
+        private void OnGameStart(global::Messages.GameStartEvent obj)
         {
             if(curLobby != null)
             {
@@ -154,7 +288,6 @@ namespace PWM
                 TriggerIsNotReady(); // Reset player ready status when game starts
             }
         }
-
         private void OnGameCompletedScoreEvent(global::Messages.CompletedGameScoreEvent obj)
         {
             if (!this.gameObject.activeSelf)
@@ -175,51 +308,31 @@ namespace PWM
 
             Client.client.EmitAsync("ScoreUpdate", CurrentLobby.Id, msg);
         }
-
-        public void OnLevelSelect(global::Messages.LevelSelectEvent msg)
+        private void OnLevelSelect(global::Messages.LevelSelectEvent obj)
         {
             if (!this.gameObject.activeSelf)
                 return;
 
-            MelonLogger.Msg($"{msg.level.name} : {msg.level.data.songName} : {msg.level.data.name}");
+            MelonLogger.Msg($"{obj.level.name} : {obj.level.data.songName} : {obj.level.data.name}");
             if (IsHost)
             {
                 MelonLogger.Msg("Selected");
-                CurrentLevel.BaseName = msg.level.data.baseName; //Used by GameManager.SetDestination...
+                CurrentLevel.BaseName = obj.level.data.baseName; //Used by GameManager.SetDestination...
                 CurrentLevel.BitPackedModifiers = GameManager.Instance.GetBitPackedModifiers();
                 CurrentLevel.PlayIntent = (int)GameManager.Instance.playIntent;
                 CurrentLevel.Difficulty = (int)GameManager.GetDifficulty();
 
                 Client.client.EmitAsync("SetLevel", CurrentLobby.Id, CurrentLevel);
+                Messenger.Default.Send(global::Messages.PlayButtonIsEnabledForIntent.Create(false, PlayIntent.FREEPLAY)); //We do not want the host to start from game menu
             }
             else
             {
-                if (!settingMap && msg.level.data.baseName != CurrentLevel.BaseName)
+                if (!settingMap && obj.level.data.baseName != CurrentLevel.BaseName)
                 {
                     SetLevel(CurrentLevel);
                 }
             }
         }
-
-        public void OnDifficultySelect(Messages.DifficultySelected msg)
-        {
-            if (!this.gameObject.activeSelf)
-                return;
-
-            if (IsHost)
-            {
-                CurrentLevel.Difficulty = (int)msg.Difficulty;
-                Client.client.EmitAsync("SetLevel", CurrentLobby.Id, CurrentLevel);
-            }
-            else
-            {
-                if (CurrentLevel.Difficulty != (int)msg.Difficulty)
-                {
-                    SetLevel(CurrentLevel);
-                }
-            }
-        }
-
         private void OnModifiersSet(global::Messages.ModifiersSet obj)
         {
             //CurrentLobby == null is to catch the message sent at boot of game
@@ -250,124 +363,29 @@ namespace PWM
 
         }
 
-        public void OnLobbyModifiersSet(Messages.NewModifiers msg)
+        private void OnPlayerHitDie(global::Messages.PlayerHitDie obj)
         {
-            MelonLogger.Msg("LobbyOverview: OnLobbyModifiersSet");
-            CurrentLobby.Level.BitPackedModifiers = msg.BitPackedModifiers;
-            settingModifiers = true;
-            SetLevel(CurrentLevel);
-            settingModifiers = false;
-        }
-
-        public void JoinedLobby(Messages.Lobby lobby)
-        {
-            curLobby = lobby;
-            lobbyTitle.text = lobby.Id;
-            foreach (var player in lobby.Players)
+            //Remove retry if player dies. Allow them only to go back to lobby
+            if (CurrentLobby != null)
             {
-                AddPlayer(player);
-            }
+                retryDeathBtn = GameObject.Find("Managers/UI State Controller/PF_CHUI_AnchorPt_DeathProtips/PF_DeathCanvas_UIv2/PW_VerticalLayoutElementPanel/PW_HorizontalLayoutElementPanel (1)/PF_TextImgLinkButton_UIv2");
+                if (retryDeathBtn == null) return;
 
-            //settingModifiers = true;
-            //lobbyManager.SetModifiers(curLobby.Modifiers);
-            //settingModifiers = false;
-
-
-            if (curLobby.Level != null)
-            {
-                SetLevel(curLobby.Level);
-            }
-
-            readyButton.gameObject.SetActive(true);
-
-            MelonLogger.Msg("JoinedLobby called");
-        }
-
-        private void OnLobbyClosed(Messages.ClosedLobby msg)
-        {
-            LeaveLobby();
-
-            lobbyManager.ShowLobbyListCanvas();
-        }
-
-        void AddPlayer(Messages.Player player)
-        {
-            string playerName = player.Name;
-            if (!players.ContainsKey(playerName))
-            {
-                PlayerEntry playerEntry = Instantiate(AssetBundleBank.Instance.PlayerEntryPrefab, playersParent);
-                playerEntry.Name = playerName;
-                playerEntry.IsReady(false);
-                players.Add(playerName, playerEntry);
-                playerEntry.IsReady(player.Ready);
-            }
-            else
-            {
-                MelonLogger.Msg($"Player: {playerName}, is already in the lobby");
+                retryDeathBtn.SetActive(false);
             }
         }
- 
-        void OnCreatedLobby(PWM.Messages.CreatedLobby msg)
-        {
-            curLobby = msg.Lobby;
-            lobbyTitle.text = curLobby.Id;
-            foreach (var player in curLobby.Players)
-            {
-                AddPlayer(player);
-            }
-            readyButton.gameObject.SetActive(true);
-            MelonLogger.Msg("ONCreatedLobby called");
-        }
+        #endregion
 
-        void OnPlayerJoinedLobby(PWM.Messages.PlayerJoined msg)
-        {
-            AddPlayer(msg.Player);
-        }
 
-        void OnPlayerLeftLobby(PWM.Messages.PlayerLeft msg)
-        {
-            string playerName = msg.Player.Name;
-
-            PlayerEntry pe;
-            if (players.TryGetValue(playerName, out pe))
-            {
-                players.Remove(playerName);
-                Destroy(pe.gameObject);
-                MelonLogger.Msg($"Player: {playerName} left the lobby");
-            }
-            else
-            {
-                MelonLogger.Msg($"Player: {playerName}, is not in the lobby");
-            }
-        }
-
-        void OnScoreSync(Messages.UpdateScore msg)
-        {
-            PlayerEntry player;
-            if (players.TryGetValue(msg.Player.Name, out player))
-            {
-                player.UpdateEntry(msg.Score); 
-            }
-        }
 
         //Start game if corresponding network event is triggered
-        private void OnStartGame(Messages.StartGame obj)
-        {
-            MelonLogger.Msg("Start Game");
-
-            gameStartTimer.gameObject.SetActive(true);
-            float delay = obj.DelayMS / 1000;
-            gameStartTimer.SetTimer(delay);
-            CancelInvoke("DelayedGameStart"); //Handle cases where we go from not all ready(30s), to all ready(5s)
-            Invoke("DelayedGameStart", delay);
-            
-        }
 
         private void DelayedGameStart()
         {
-            catchStarting = false;
+            starting = true;
             PlayButtonManager playBtnManager = GameObject.Find("Managers/UI State Controller/PF_CHUI_AnchorPt_SongSelection/PF_SongSelectionCanvas_UIv2/ForwardInfoBoard/DiffPlay/StartButton").GetComponent<PlayButtonManager>();
             playBtnManager.PlayButtonButtonHander();
+            starting = false;
         }
 
         //Leave lobby. If host leaves lobby is closed.
@@ -384,6 +402,10 @@ namespace PWM
                 MelonLogger.Msg($"You left the lobby");
                 Client.client.EmitAsync("LeaveLobby", lobbyManager.Player, curLobby.Id);
             }
+
+            preventUIInteraction = false;
+            retryDeathBtn.SetActive(true);
+            retryDeathBtn = null;
 
             var toClean = players.Values.ToList();
             players.Clear();
@@ -409,7 +431,10 @@ namespace PWM
         {
             if (IsHost)
             {
-
+                //if (canStartYet == false)
+                //{
+                //    MelonLogger.Warning("Implement canStartYet functionality/warning");
+                //}    
                 Client.client.EmitAsync("StartGame", curLobby.Id);
             }
             else
@@ -446,40 +471,43 @@ namespace PWM
                 Client.client.EmitAsync("PlayerReady", CurrentLobby.Id, lobbyManager.Player, false);
         }
 
-
-        #region SET_GAME
-
         public void SetLevel(Messages.Network.SetLevel setLevel)
         {
             CurrentLevel = setLevel;
             MelonLogger.Msg($"{setLevel.BaseName}_{(Difficulty)setLevel.Difficulty}:{setLevel.BitPackedModifiers}");
+            if (setLevel.BaseName == "Lobby")
+                return;
 
             settingMap = true;
             settingModifiers = true;
 
-            if (b)
 
             GameManager.Instance.playIntent = (PlayIntent)CurrentLevel.PlayIntent; //We have to make sure playintent is not NONE when calling ShowDiffPlay
             UIStateController.Instance.destHasBeenSetFromPoster = true;
 
             //Replication of pressing on song panel
             GameplayDatabase.CachedCurrent.SetModifiers(setLevel.BitPackedModifiers);
-            GameManager.Instance.SetDestinationAndUpdateUIFromDestinationString($"{setLevel.BaseName}_{(Difficulty)setLevel.Difficulty}:{setLevel.BitPackedModifiers}", true, true);
+            string diffString = (CurrentDifficulty != Difficulty.Normal ? $"_{CurrentDifficulty}" : ""); //Normal is not part of destination so we have to remove that
+            string dstString = $"{setLevel.BaseName}{diffString}:{setLevel.BitPackedModifiers}";
+            GameManager.Instance.SetDestinationAndUpdateUIFromDestinationString(dstString, true, true);
             DiffPlayHintsController.Instance.ShowDiffPlay();
 
-            global::Messenger.Default.Send(global::Messages.DifficultyOptionsAreLocked.Create(StaticUITerms.DiffUnlocked));
-            global::Messenger.Default.Send(global::Messages.StylesAreLocked.Create(StaticUITerms.StylesUnlocked));
-            global::Messenger.Default.Send(global::Messages.StyleResetAndRandomAreLocked.Create(StaticUITerms.StylesResetAndRandomUnlocked));
+            global::Messenger.Default.Send(global::Messages.DifficultyOptionsAreLocked.Create(StaticUITerms.DiffUnlocked)); //We need to unlock diff to actually show current selected diff
+            global::Messenger.Default.Send(global::Messages.StylesAreLocked.Create(StaticUITerms.StylesLockedForCampaigns));
+            global::Messenger.Default.Send(global::Messages.StyleResetAndRandomAreLocked.Create(StaticUITerms.StylesResetAndRandomAreLocked));
             global::Messenger.Default.Send(global::Messages.ToggleSceneDetailPanel.Create(true));
-            
-            global::Messenger.Default.Send(global::Messages.PlayButtonIsEnabledForIntent.Create(true, (PlayIntent)CurrentLevel.PlayIntent));
+
+            global::Messenger.Default.Send(global::Messages.PlayButtonIsEnabledForIntent.Create(false, (PlayIntent)CurrentLevel.PlayIntent));
 
             //GameObject.Find("Managers/UI State Controller/PF_CHUI_AnchorPt_SongSelection/PF_SongSelectionCanvas_UIv2/ForwardInfoBoard/DiffPlay/DiffButtons").GetComponent<DifficultySelector>().InitDifficultyButtons();
             settingMap = false;
             settingModifiers = false;
         }
 
-        //Catch selection of difficulty
+
+        #region Hooks
+
+        //Catch selection of difficulty send message we can deal with
         [HarmonyPatch(typeof(CncrgDifficultyButtonController), "DifficultyButtonHandler", new Type[0] { })]
         private static class DifficultyButtonController_Mod
         {
@@ -490,33 +518,89 @@ namespace PWM
             }
         }
 
-        [HarmonyPatch(typeof(DiffPlayHintsController), "SettingIsAvailableMessage")]
-        private static class SettingIsAvailableMessageHook
-        {
-            public static void Postfix(DiffPlayHintsController __instance, global::Messages.DifficultyOptionsAreLocked e)
-            {
-                string s = global::Messages.DifficultyOptionsAreLocked.s_instance.value;
-                MelonLogger.Msg($"Got call to SettingIsAvailableMessage with '{e.value}', '{s}' as value");
-            }
-        }
+        //[HarmonyPatch(typeof(DiffPlayHintsController), "SettingIsAvailableMessage")]
+        //private static class SettingIsAvailableMessageHook
+        //{
+        //    public static void Postfix(DiffPlayHintsController __instance, global::Messages.DifficultyOptionsAreLocked e)
+        //    {
+        //        string s = global::Messages.DifficultyOptionsAreLocked.s_instance.value;
+        //        MelonLogger.Msg($"Got call to SettingIsAvailableMessage with '{e.value}', '{s}' as value");
+        //    }
+        //}
 
-        //We want to avoid the user starting manually while in lobby. 
-        //To do this, we prefix hook the start button function and
-        //only if the game is actually starting, do we pass the call down
-        //to original.
-        //If we are not currently in a lobby, we should just allow the original to be called,
-        //to not disrupt singleplayer gameplay
+        //We disable the playbutton. But incase someone manages to enable it, prevent anything from happening
         [HarmonyPatch(typeof(PlayButtonManager), "PlayButtonButtonHander", new Type[0] { })]
         private static class PlayButtonManager_Mod
         {
             public static bool Prefix(PlayButtonManager __instance)
             {
-                if (catchStarting == false || curLobby == null)
-                {
-                    catchStarting = true;
-                    return true;
-                }
-                return false;
+                if (preventUIInteraction && !starting)
+                    return false;
+                return true;
+            }
+        }
+
+        //Prevent user pressing Page Up when in lobby
+        [HarmonyPatch(typeof(SceneDetailManager), "PaginationRightButtonHandler")]
+        private static class PaginationRightButtonHandler_Hook
+        {
+            public static bool Prefix(SceneDetailManager __instance)
+            {
+                if (preventUIInteraction)
+                    return false;
+                return true;
+
+            }
+        }
+
+        //Prevent user pressing Page Down when in lobby
+        [HarmonyPatch(typeof(SceneDetailManager), "PaginationLeftButtonHandler")]
+        private static class PaginationLeftButtonHandler_Hook
+        {
+            public static bool Prefix(SceneDetailManager __instance)
+            {
+                if (preventUIInteraction)
+                    return false;
+                return true;
+
+            }
+        }
+
+        //Prevent clicking back
+        [HarmonyPatch(typeof(SceneDetailManager), "CloseSceneDetails")]
+        private static class CloseSceneDetails_Hook
+        {
+            public static bool Prefix(SceneDetailManager __instance)
+            {
+                if (preventUIInteraction)
+                    return false;
+                return true;
+
+            }
+        }
+
+        //Prevent clicking styles in song details panel, as this allow user to select modifiers anyway
+        [HarmonyPatch(typeof(SceneDetailManager), "TabSelectButtonHandler")]
+        private static class TabSelectButtonHandler_Hook
+        {
+            public static bool Prefix(SceneDetailManager __instance)
+            {
+                if (preventUIInteraction)
+                    return false;
+                return true;
+            }
+        }
+
+        //prevent triggering any of the button in upper part of menu
+        [HarmonyPatch(typeof(FeatureSelectMenuButton), "SelectFeatureType")]
+        private static class SelectFeatureType_Hook
+        {
+            public static bool Prefix(FeatureSelectMenuButton __instance)
+            {
+                if (preventUIInteraction)
+                    return false;
+                return true;
+
             }
         }
         #endregion
