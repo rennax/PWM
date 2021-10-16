@@ -56,6 +56,7 @@ namespace PWM
         private static bool starting = false;
         private static bool settingModifiers = false;
         private static bool settingMap = false;
+        private static bool settingDiff = false;
 
         public Messages.Lobby CurrentLobby { get => curLobby; set => curLobby = value; }
 
@@ -113,7 +114,7 @@ namespace PWM
             global::Messenger.Default.Register<global::Messages.CompletedGameScoreEvent>(new Action<global::Messages.CompletedGameScoreEvent>(OnGameCompletedScoreEvent));
             global::Messenger.Default.Register<global::Messages.ModifiersSet>(new Action<global::Messages.ModifiersSet>(OnModifiersSet));
             global::Messenger.Default.Register<global::Messages.PlayerHitDie>(new Action<global::Messages.PlayerHitDie>(OnPlayerHitDie));
-            global::Messenger.Default.Register<global::Messages.ReturningToMainMenu>(new Action(OnReturnToMenu));
+            global::Messenger.Default.Register<global::Messages.GameEndEvent>(new Action(OnGameEnd));
 
         }
 
@@ -376,7 +377,7 @@ namespace PWM
                 retryDeathBtn.SetActive(false);
             }
         }
-        private void OnReturnToMenu()
+        private void OnGameEnd()
         {
             //TODO: Find better solution that this. This is pretty yikes
             Invoke("PreventInteraction", 0.05f);
@@ -387,10 +388,13 @@ namespace PWM
         {
             if (!IsHost)
             {
+                settingDiff = true;
+                global::Messenger.Default.Send(global::Messages.DifficultyOptionsAreLocked.Create(StaticUITerms.DiffUnlocked)); //Trigger reset on diff btns to show current diff
+                settingDiff = false;
                 global::Messenger.Default.Send(global::Messages.StylesAreLocked.Create(StaticUITerms.StylesLockedForCampaigns));
                 global::Messenger.Default.Send(global::Messages.StyleResetAndRandomAreLocked.Create(StaticUITerms.StylesResetAndRandomAreLocked));
             }
-            global::Messenger.Default.Send(global::Messages.PlayButtonIsEnabledForIntent.Create(false, PlayIntent.FREEPLAY)); //We do not want the host to start from game men
+            global::Messenger.Default.Send(global::Messages.PlayButtonIsEnabledForIntent.Create(false, PlayIntent.FREEPLAY)); //We do not want the host to start from game menu
         }
 
         //Start game if corresponding network event is triggered
@@ -440,6 +444,10 @@ namespace PWM
             //Make sure game is not started if we leave while game start is in progress.
             CancelInvoke("DelayedGameStart");
 
+            //Ensure that we are not stuck if we leave after a game has finished
+            global::Messenger.Default.Send(global::Messages.PlayButtonIsEnabledForIntent.Create(true, PlayIntent.FREEPLAY));
+            global::Messenger.Default.Send(global::Messages.StylesAreLocked.Create(StaticUITerms.StylesUnlocked));
+            global::Messenger.Default.Send(global::Messages.StyleResetAndRandomAreLocked.Create(StaticUITerms.StylesResetAndRandomUnlocked));
 
             lobbyManager.ShowLobbyListCanvas();
         }
@@ -494,6 +502,7 @@ namespace PWM
 
             settingMap = true;
             settingModifiers = true;
+            settingDiff = true;
 
 
             GameManager.Instance.playIntent = (PlayIntent)CurrentLevel.PlayIntent; //We have to make sure playintent is not NONE when calling ShowDiffPlay
@@ -518,9 +527,10 @@ namespace PWM
             //if (diffResetObj != null)
             //    diffResetObj.GetComponent<DifficultySelector>().InitDifficultyButtons();
 
-
-            settingMap = false;
+            settingDiff = false;
             settingModifiers = false;
+            settingMap = false;
+
         }
 
 
@@ -558,7 +568,7 @@ namespace PWM
         {
             public static bool Prefix(OutlinedCncrgUIButton __instance)
             {
-                if (preventUIInteraction && !settingMap)
+                if (preventUIInteraction && !settingDiff)
                     return false;
                 return true;
             }
