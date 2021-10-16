@@ -284,7 +284,7 @@ namespace Test_client
             }
 
             Console.WriteLine("");
-            client.EmitAsync("SetLevel", setLevel);
+            client.EmitAsync("SetLevel", lobby.Id, setLevel);
         }
 
         static void SetModifier()

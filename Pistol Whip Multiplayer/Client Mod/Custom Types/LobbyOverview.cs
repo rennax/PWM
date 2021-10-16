@@ -43,8 +43,7 @@ namespace PWM
         float tickRate = 1f;
         PlayerActionManager actionManager;
 
-        private bool settingModifiers;
-        private bool settingMap;
+
 
         public bool IsHost { get => (curLobby != null && lobbyManager.Player.Name == curLobby.Host.Name); }
 
@@ -55,6 +54,8 @@ namespace PWM
 
         private static bool preventUIInteraction = false;
         private static bool starting = false;
+        private static bool settingModifiers = false;
+        private static bool settingMap = false;
 
         public Messages.Lobby CurrentLobby { get => curLobby; set => curLobby = value; }
 
@@ -112,6 +113,7 @@ namespace PWM
             global::Messenger.Default.Register<global::Messages.CompletedGameScoreEvent>(new Action<global::Messages.CompletedGameScoreEvent>(OnGameCompletedScoreEvent));
             global::Messenger.Default.Register<global::Messages.ModifiersSet>(new Action<global::Messages.ModifiersSet>(OnModifiersSet));
             global::Messenger.Default.Register<global::Messages.PlayerHitDie>(new Action<global::Messages.PlayerHitDie>(OnPlayerHitDie));
+            global::Messenger.Default.Register<global::Messages.ReturningToMainMenu>(new Action(OnReturnToMenu));
 
         }
 
@@ -236,6 +238,7 @@ namespace PWM
                 AddPlayer(player);
             }
             readyButton.gameObject.SetActive(true);
+            Invoke("PreventInteraction", 0.05f);
             MelonLogger.Msg("ONCreatedLobby called");
         }
         void OnPlayerJoinedLobby(PWM.Messages.PlayerJoined msg)
@@ -323,7 +326,7 @@ namespace PWM
                 CurrentLevel.Difficulty = (int)GameManager.GetDifficulty();
 
                 Client.client.EmitAsync("SetLevel", CurrentLobby.Id, CurrentLevel);
-                Messenger.Default.Send(global::Messages.PlayButtonIsEnabledForIntent.Create(false, PlayIntent.FREEPLAY)); //We do not want the host to start from game menu
+                Invoke("PreventInteraction", 0.05f);
             }
             else
             {
@@ -362,7 +365,6 @@ namespace PWM
             }
 
         }
-
         private void OnPlayerHitDie(global::Messages.PlayerHitDie obj)
         {
             //Remove retry if player dies. Allow them only to go back to lobby
@@ -374,9 +376,22 @@ namespace PWM
                 retryDeathBtn.SetActive(false);
             }
         }
+        private void OnReturnToMenu()
+        {
+            //TODO: Find better solution that this. This is pretty yikes
+            Invoke("PreventInteraction", 0.05f);
+        }
         #endregion
 
-
+        private void PreventInteraction()
+        {
+            if (!IsHost)
+            {
+                global::Messenger.Default.Send(global::Messages.StylesAreLocked.Create(StaticUITerms.StylesLockedForCampaigns));
+                global::Messenger.Default.Send(global::Messages.StyleResetAndRandomAreLocked.Create(StaticUITerms.StylesResetAndRandomAreLocked));
+            }
+            global::Messenger.Default.Send(global::Messages.PlayButtonIsEnabledForIntent.Create(false, PlayIntent.FREEPLAY)); //We do not want the host to start from game men
+        }
 
         //Start game if corresponding network event is triggered
 
@@ -404,8 +419,11 @@ namespace PWM
             }
 
             preventUIInteraction = false;
-            retryDeathBtn.SetActive(true);
-            retryDeathBtn = null;
+            if(retryDeathBtn != null)
+            {
+                retryDeathBtn.SetActive(true);
+                retryDeathBtn = null;
+            }
 
             var toClean = players.Values.ToList();
             players.Clear();
@@ -431,10 +449,6 @@ namespace PWM
         {
             if (IsHost)
             {
-                //if (canStartYet == false)
-                //{
-                //    MelonLogger.Warning("Implement canStartYet functionality/warning");
-                //}    
                 Client.client.EmitAsync("StartGame", curLobby.Id);
             }
             else
@@ -499,7 +513,12 @@ namespace PWM
 
             global::Messenger.Default.Send(global::Messages.PlayButtonIsEnabledForIntent.Create(false, (PlayIntent)CurrentLevel.PlayIntent));
 
-            //GameObject.Find("Managers/UI State Controller/PF_CHUI_AnchorPt_SongSelection/PF_SongSelectionCanvas_UIv2/ForwardInfoBoard/DiffPlay/DiffButtons").GetComponent<DifficultySelector>().InitDifficultyButtons();
+            //"Reset" difficulty buttons by initializing them again. This will show the current selected difficulty
+            //GameObject diffResetObj = GameObject.Find("Managers/UI State Controller/PF_CHUI_AnchorPt_SongSelection/PF_SongSelectionCanvas_UIv2/ForwardInfoBoard/DiffPlay/DiffButtons");
+            //if (diffResetObj != null)
+            //    diffResetObj.GetComponent<DifficultySelector>().InitDifficultyButtons();
+
+
             settingMap = false;
             settingModifiers = false;
         }
@@ -507,16 +526,45 @@ namespace PWM
 
         #region Hooks
 
+        #region DifficultyButton
         //Catch selection of difficulty send message we can deal with
-        [HarmonyPatch(typeof(CncrgDifficultyButtonController), "DifficultyButtonHandler", new Type[0] { })]
+        [HarmonyPatch(typeof(CncrgDifficultyButtonController), "DifficultyButtonHandler")]
         private static class DifficultyButtonController_Mod
         {
-            public static void Postfix(CncrgDifficultyButtonController __instance)
+            public static bool Prefix(CncrgDifficultyButtonController __instance)
             {
-                //MelonLogger.Msg($"New difficulty selected: {__instance.Difficulty}");
+                if (preventUIInteraction)
+                    return false;
+
                 Messenger.Default.Send(new Messages.DifficultySelected { Difficulty = __instance.Difficulty });
+                return true;
             }
         }
+
+        [HarmonyPatch(typeof(DifficultySelector), "DifficultySelectButtonHandler")]
+        private static class DifficultySelectButtonHandler_Hook
+        {
+            public static bool Prefix(DifficultySelector __instance)
+            {
+                if (preventUIInteraction)
+                    return false;
+                return true;
+            }
+        }
+
+
+        [HarmonyPatch(typeof(OutlinedCncrgUIButton), "SetAsSelected")]
+        private static class SetAsSelected_Hook
+        {
+            public static bool Prefix(OutlinedCncrgUIButton __instance)
+            {
+                if (preventUIInteraction && !settingMap)
+                    return false;
+                return true;
+            }
+        }
+
+        #endregion
 
         //[HarmonyPatch(typeof(DiffPlayHintsController), "SettingIsAvailableMessage")]
         //private static class SettingIsAvailableMessageHook
