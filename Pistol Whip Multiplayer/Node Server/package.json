@@ -5,13 +5,13 @@
   "main": "main.js",
   "scripts": {
     "test": "test",
-    "start": "node main.js" 
+    "start": "node main.js"
   },
   "author": "renaxi",
   "license": "MIT",
   "dependencies": {
+    "node-cron": "^3.0.0",
     "socket.io": "^3.1.2",
     "uuid": "^8.3.2"
   }
 }
-

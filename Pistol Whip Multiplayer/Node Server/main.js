@@ -5,15 +5,32 @@ const socket = require('socket.io');
 const { join } = require('path');
 const { Console } = require('console');
 const { setUncaughtExceptionCaptureCallback } = require('process');
+const fs = require('fs');
+const cron = require('node-cron');
 
 var io = socket(httpServer, {
   pingInterval: 10000,
   pingTimeout: 5000
 });
 
-var port = process.env.PORT || 3000,
+var port = process.env.PORT || 3000
+
+//#region statistics
+var statsFilePath = 'stats.json';
+var stats = {
+  lobbiesCreated: 0,
+  refreshRequests: 0,
+  startGame: 0
+};
+
+if (fs.existsSync(statsFilePath))
+{
+  let rawData = fs.readFileSync(statsFilePath);
+  stats = JSON.parse(rawData);
+}
 
 
+//#endregion
 
 // socketToLobbyPlayer[socket.id] = {player : .., lobbyId : ..}
 socketToLobbyPlayer = {};
@@ -45,7 +62,6 @@ io.on('connection', function(socket){
     });
 
     socket.on("CreateLobby", (lobby, player) => {
-
       //Handle cases where lobby already exists
       let exists = lobbies.find(e => e.Id === lobby.Id);
       if (exists) {
@@ -66,8 +82,8 @@ io.on('connection', function(socket){
 
       socket.emit("CreatedLobby", lobby);
       addSocketToLobby(lobby, player, socket);
+      stats.lobbiesCreated += 1; //stats
     });
-
     
     socket.on("JoinLobby", (player, lobbyId) => {
       let lobby = lobbies.find(e => e.Id === lobbyId);
@@ -134,6 +150,7 @@ io.on('connection', function(socket){
     socket.on("GetLobbyList", () => {
       console.log("GetLobbyList");
       socket.emit("GetLobbyList", lobbies);
+      stats.refreshRequests += 1;
     });
 
     socket.on("SetLevel", (lobbyId, setLevel) => {
@@ -200,6 +217,7 @@ io.on('connection', function(socket){
 
         startGame(lobby, delayMS);
         console.log(`Lobby ${lobby.Id} started game with delay: ${delayMS/1000}`);
+        stats.startGame += 1; //Stats
       }
       else
        console.log(`failed to start game because lobby with id: ${lobbyId}, does not exist`);
@@ -213,8 +231,17 @@ io.on('connection', function(socket){
         io.in(lobby.Id).emit("OnScoreSync", updateScore);
       }
     });
-
 });
+
+//Backup stats every hour
+cron.schedule('* */1 * * *', function () {
+  try {
+    const data = fs.writeFileSync(statsFilePath, JSON.stringify(stats));
+  } catch (error) {
+    console.log(error);
+  }
+});
+
 
 httpServer.listen(port, () => {
   console.log("Listening on *:" + port);
