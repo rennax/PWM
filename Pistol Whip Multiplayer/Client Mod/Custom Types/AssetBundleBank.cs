@@ -19,6 +19,8 @@ namespace PWM
         public static AssetBundleBank Instance = null;
 
         //For some reason loaded assets get yeeted so we have to do this..
+
+        //UIBundle prefabs start here
         public LobbyPreviewEntry LobbyPreviewEntryPrefab
         {
             get
@@ -54,17 +56,33 @@ namespace PWM
             }
         }
 
-        public GameObject KeyboardPrefab
+        public GameObject OpenPWMPrefab
         {
             get
             {
                 if (uiBundle == null)
+                    return null;
+                var asset = uiBundle.Load<GameObject>("Enable_Icon");
+                SetSPShaderForTMP(asset);
+                return asset;
+            }
+        }
+
+
+        // KeyboardBundle prefabs start here
+        public GameObject KeyboardPrefab
+        {
+            get
+            {
+                if (keyboardBundle == null)
                     return null;
                 var asset = keyboardBundle.Load<GameObject>("Keyboard_Canvas");
                 SetSPShaderForTMP(asset);
                 return asset;
             }
         }
+
+
 
         public Il2CppAssetBundle keyboardBundle;
         public Il2CppAssetBundle uiBundle;

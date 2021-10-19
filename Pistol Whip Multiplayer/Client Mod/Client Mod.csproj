@@ -165,6 +165,7 @@
     <Compile Include="Custom Types\LobbyManager.cs" />
     <Compile Include="Custom Types\LobbyOverview.cs" />
     <Compile Include="Custom Types\LobbyPreviewEntry.cs" />
+    <Compile Include="Custom Types\OpenPWM.cs" />
     <Compile Include="Custom Types\PlayerCount.cs" />
     <Compile Include="Custom Types\PlayerEntry.cs" />
     <Compile Include="Custom Types\ScoreDisplay.cs" />

@@ -22,6 +22,7 @@ namespace PWM
 
         static GameObject lobbyPanel;
         static GameObject keyboard;
+        static GameObject openPWMButton;
         static Keyboard.VRKeyboardManager keyboardManager;
 
         //TODO
@@ -41,6 +42,7 @@ namespace PWM
         {
             //Register custom types for PWM
             ClassInjector.RegisterTypeInIl2Cpp<GameStartTimer>();
+            ClassInjector.RegisterTypeInIl2Cpp<OpenPWM>();
             ClassInjector.RegisterTypeInIl2Cpp<ScoreDisplay>();
             ClassInjector.RegisterTypeInIl2Cpp<LobbyManager>();
             ClassInjector.RegisterTypeInIl2Cpp<LobbyPreviewEntry>();
@@ -71,9 +73,7 @@ namespace PWM
             global::Messenger.Default.Register<global::Messages.GamePauseEvent>(new Action<global::Messages.GamePauseEvent>(OnGamePauseEvent));
             global::Messenger.Default.Register<global::Messages.PlayerHitDie>(new Action<global::Messages.PlayerHitDie>(OnPlayerHitDie));
             global::Messenger.Default.Register<global::Messages.SongStopEvent>(new Action(OnSongStopEvent));
-            global::Messenger.Default.Register<global::Messages.ResetPlayer>(new Action(OnResetPlayer));
-            
-                
+            global::Messenger.Default.Register<global::Messages.ResetPlayer>(new Action(OnResetPlayer));     
         }
 
         private void OnPlayerHitDie(global::Messages.PlayerHitDie obj)
@@ -142,9 +142,16 @@ namespace PWM
             GameObject bankGO = new GameObject();
             bankGO.name = "AssetBundleBank";
             AssetBundleBank bank = bankGO.AddComponent<AssetBundleBank>();
+
+            //Instantiate static gameobjects
             lobbyPanel = UnityEngine.Object.Instantiate(bank.LobbyPanelPrefab);
             keyboard = UnityEngine.Object.Instantiate(bank.KeyboardPrefab);
             keyboardManager = keyboard.GetComponent<Keyboard.VRKeyboardManager>();
+
+            openPWMButton = UnityEngine.Object.Instantiate(bank.OpenPWMPrefab);
+            OpenPWM openPWM = openPWMButton.GetComponent<OpenPWM>();
+            openPWM.pwmPanel = lobbyPanel;
+            lobbyPanel.SetActive(false);
         }
     }
 
