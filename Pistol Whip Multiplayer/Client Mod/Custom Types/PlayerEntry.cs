@@ -22,11 +22,15 @@ namespace PWM
                 }
             get => _name;
         }
+
+        
         private string _name = "";
         private TMP_Text hitAcc;
         private TMP_Text beatAcc;
         private TMP_Text score;
         private Transform readyIcon;
+
+        private Messages.ScoreSync scoreSync;
 
         void Awake()
         {
@@ -40,16 +44,24 @@ namespace PWM
             UpdateEntry(new Messages.ScoreSync { Score = 0, HitAccuracy = 0, BeatAccuracy = 0 }); 
         }
 
+        //OnEnable handle cases where updates are made while the lobby ui is disabled
         void OnEnable()
         {
             pName.text = _name;
+            UpdateUI();
         }
 
         public void UpdateEntry(PWM.Messages.ScoreSync scoreSync)
         {
+            this.scoreSync = scoreSync;
+            UpdateUI();
+        }
+
+        private void UpdateUI()
+        {
             score.text = $"{scoreSync.Score}";
-            beatAcc.text = $"{scoreSync.BeatAccuracy*100:0.00} %";
-            hitAcc.text = $"{scoreSync.HitAccuracy*100:0.00} %";
+            beatAcc.text = $"{scoreSync.BeatAccuracy * 100:0.00} %";
+            hitAcc.text = $"{scoreSync.HitAccuracy * 100:0.00} %";
         }
 
         public void IsReady(bool ready)
