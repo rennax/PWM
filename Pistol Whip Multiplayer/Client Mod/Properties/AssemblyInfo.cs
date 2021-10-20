@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using MelonLoader;
 
-[assembly: MelonInfo(typeof(PWM.Entry), "Pistol Whip Multiplayer", "0.0.1", "Renaxi")]
+[assembly: MelonInfo(typeof(PWM.Entry), "Pistol Whip Multiplayer", "0.1.0", "Renaxi")]
 [assembly: MelonGame("Cloudhead Games, Ltd.", "Pistol Whip")]
 
 // General Information about an assembly is controlled through the following

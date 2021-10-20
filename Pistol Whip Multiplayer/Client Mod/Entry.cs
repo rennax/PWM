@@ -65,6 +65,7 @@ namespace PWM
 
             MelonLogger.Msg("Initialized client");
 
+#if DEBUG
             global::Messenger.Default.Register<global::Messages.GameEndEvent>(new Action(OnGameEndEvent));
             global::Messenger.Default.Register<global::Messages.GameAbortEvent>(new Action(OnGameAbortEvent));
             global::Messenger.Default.Register<global::Messages.CompletedGameScoreEvent>(new Action<global::Messages.CompletedGameScoreEvent>(OnCompletedGameScoreEvent));
@@ -73,7 +74,8 @@ namespace PWM
             global::Messenger.Default.Register<global::Messages.GamePauseEvent>(new Action<global::Messages.GamePauseEvent>(OnGamePauseEvent));
             global::Messenger.Default.Register<global::Messages.PlayerHitDie>(new Action<global::Messages.PlayerHitDie>(OnPlayerHitDie));
             global::Messenger.Default.Register<global::Messages.SongStopEvent>(new Action(OnSongStopEvent));
-            global::Messenger.Default.Register<global::Messages.ResetPlayer>(new Action(OnResetPlayer));     
+            global::Messenger.Default.Register<global::Messages.ResetPlayer>(new Action(OnResetPlayer));
+#endif
         }
 
         private void OnPlayerHitDie(global::Messages.PlayerHitDie obj)
