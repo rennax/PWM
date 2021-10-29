@@ -9,6 +9,8 @@ namespace PWM
     class Messenger
     {
         private static Messenger _instance = null;
+        public Dictionary<Il2CppSystem.ValueTuple<Il2CppSystem.Type, Il2CppSystem.Type>, Il2CppSystem.Delegate> functions { get; set; }
+
         private Dictionary<Type, Delegate> simpleActions = new Dictionary<Type, Delegate>();
         private Dictionary<Type, Delegate> actions = new Dictionary<Type, Delegate>();
 
@@ -45,7 +47,7 @@ namespace PWM
         public void Register<T>(Action<T> action)
         {
             Delegate del;
-            if (actions.TryGetValue(typeof(T), out del) == true)
+            if (actions.TryGetValue(typeof(T), out del) == false)
             {
                 actions.Add(typeof(T), action);
             }
@@ -59,7 +61,7 @@ namespace PWM
         public void Register<T>(Action action)
         {
             Delegate del;
-            if (simpleActions.TryGetValue(typeof(T), out del) == true)
+            if (simpleActions.TryGetValue(typeof(T), out del) == false)
             {
                 simpleActions.Add(typeof(T), action);
             }
